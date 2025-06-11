@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Drive Codeforces",
+  "version": "0.1.0",
+  "description": "An extension to help solve Codeforces problems using AI.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    },
+    "default_title": "Drive Codeforces",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://codeforces.com/problemset/problem/*/*",
+        "https://codeforces.com/contest/*/problem/*"
+      ],
+      "js": ["content_script.js"]
+    }
+  ],
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://codeforces.com/*",
+    "http://localhost:3000/"
+  ]
+}
