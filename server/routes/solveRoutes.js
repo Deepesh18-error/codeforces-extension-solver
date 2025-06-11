@@ -2,9 +2,11 @@
 
 const express = require('express');
 const router = express.Router();
+const { getAiSolution } = require('../services/aiService'); // <-- Import our new AI service
 
 // This route will correspond to POST /api/solve
-router.post('/', (req, res) => {
+// It needs to be 'async' now because we are waiting for the AI.
+router.post('/', async (req, res) => {
   console.log('--- Request received at /api/solve ---');
 
   // --- Data Validation Logic ---
@@ -16,14 +18,24 @@ router.post('/', (req, res) => {
 
   console.log('Received Problem Title:', problemData.title);
 
-  // --- Dummy Response Logic ---
-  const dummySolution = {
-    solution: `// This is a placeholder solution from the PHASE 2 SERVER!\n// Problem: ${problemData.title}\n\nint main() {\n    return 0;\n}`
-  };
+  // --- AI LOGIC (The new part) ---
+  // Replace the dummy logic with a call to our AI service.
+  try {
+    const solutionCode = await getAiSolution(problemData);
+    
+    // The AI service has been called, and we have a solution.
+    // Now we package it in the standard response format.
+    const responsePayload = {
+      solution: solutionCode
+    };
 
-  res.status(200).json(dummySolution);
+    res.status(200).json(responsePayload);
+
+  } catch (error) {
+    // This will catch any unexpected errors from the aiService itself.
+    console.error("Error in /api/solve handler:", error);
+    res.status(500).json({ error: "An internal server error occurred while contacting the AI service." });
+  }
 });
-
-// We could add other related routes here, like GET /api/solve/history, etc.
 
 module.exports = router;
