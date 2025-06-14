@@ -1,4 +1,4 @@
-// File: server/services/aiService.js
+// File: server/services/aiService.js (FINAL - Corrected Model Name)
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { buildOptimalPrompt } = require('./promptBuilder');
@@ -13,38 +13,48 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
  * @returns {Promise<string>} A promise that resolves with the final, clean AI-generated code.
  */
 async function getAiSolution(problemData) {
-  // 1. Build the optimal prompt using our dedicated builder.
-  const prompt = buildOptimalPrompt(problemData);
-
-  // ==========================================================
-  //  DEBUG LOG: This shows you the exact data being sent to the AI.
-  // ==========================================================
-  console.log("--- FULL PROMPT BEING SENT TO GEMINI ---");
-  console.log(prompt);
-  console.log("----------------------------------------");
-  // ==========================================================
-
-  // 2. Call the AI library's function.
-  const modelName = "gemini-2.5-flash-preview-05-20"; // Using the model you requested
-  console.log(`AI_Service: Using Google Gemini model: ${modelName}`);
-  console.log("AI_Service: Sending request to Google Gemini...");
-
+  // The entire function is wrapped in a try...catch to handle any unexpected errors,
+  // especially from the API call.
   try {
+    // 1. Build the optimal prompt.
+    const prompt = buildOptimalPrompt(problemData);
+    console.log("AI_Service: Prompt built successfully.");
+
+    // 2. Call the AI library's function.
+    // --- THIS IS THE ONLY LINE THAT HAS BEEN CHANGED ---
+    const modelName = "gemini-1.5-flash-latest"; // Using a stable, recommended model name.
+    
+    console.log(`AI_Service: Using Google Gemini model: ${modelName}`);
+    console.log("AI_Service: Sending request to Google Gemini...");
+    
     const model = genAI.getGenerativeModel({ model: modelName });
     const result = await model.generateContent(prompt);
     const response = await result.response;
-    const rawSolution = response.text();
     
+    // This critical check handles cases where Gemini blocks the response for safety.
+    if (!response || !response.text()) {
+        const finishReason = response?.promptFeedback?.blockReason || 'No content';
+        const safetyRatings = response?.candidates?.[0]?.safetyRatings || 'N/A';
+        console.error(`AI_Service: Gemini response was empty or blocked. Reason: ${finishReason}`);
+        console.error(`AI_Service: Safety Ratings: ${JSON.stringify(safetyRatings)}`);
+        // We throw a specific error that the route handler can catch.
+        throw new Error(`The AI service returned an empty or blocked response. Reason: ${finishReason}`);
+    }
+    
+    const rawSolution = response.text();
     console.log("AI_Service: Response received from Google Gemini.");
 
-    // 3. Get the code back by refining and cleaning it with our dedicated parser.
+    // 3. Get the code back by refining and cleaning it.
     const cleanSolution = parseCodeFromResponse(rawSolution);
     return cleanSolution;
 
   } catch (error) {
-    console.error("AI_Service: Error calling Google Gemini API:", error);
-    // Return a user-friendly error message formatted as a comment in the code
-    return `// Error: Could not get a solution from the AI.\n// Reason: ${error.message}`;
+    // This block catches errors from the API call (e.g., network issues, invalid API key)
+    // or the custom error we threw above for safety blocks.
+    console.error("AI_Service: An error occurred within getAiSolution:", error.message);
+    
+    // Re-throw the error so the calling function (solveRoutes.js) knows something went wrong.
+    throw error;
   }
 }
 

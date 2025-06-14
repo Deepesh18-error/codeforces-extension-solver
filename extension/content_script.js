@@ -1,191 +1,226 @@
-/**
- * Codeforces AI Solver - Content Script
- *
- * This script is the "Undercover Agent" that operates directly on the
- * Codeforces problem pages. Its mission is as follows:
- *
+// File: extension/content_script.js (FINAL, with Robust URL Handling)
+(() => {
+    console.log(`[AI SOLVER] Script INJECTED on ${window.location.href}`);
 
- *
- * Mission 2: Execute on Command.
- *   - When the button is clicked, it provides user feedback (e.g., "Solving...").
- *   - It then scrapes all necessary data from the page: title, statement, and sample tests.
- *
- * Mission 3: Report to HQ.
- *   - It packages the scraped data into a clean object.
- *   - It sends this data object to the background script (HQ) for processing.
- *
- * Mission 4: Await Orders and Act.
- *   - It listens for a response message from the background script.
- *   - When a solution is received, it finds the submission text area and pastes the code.
- *   - It then resets the button to its original state.
- */
+    // ==========================================================
+    //  HELPER FUNCTIONS
+    // ==========================================================
+    const injectPasterScript = () => {
+        if (document.getElementById('ai-solver-paster-script')) return;
+        const script = document.createElement('script');
+        script.id = 'ai-solver-paster-script';
+        script.src = chrome.runtime.getURL('injector.js');
+        (document.head || document.documentElement).appendChild(script);
+        console.log('[AI SOLVER] Paster script has been injected into the page.');
+    };
 
+    const waitForElement = (selector, callback, timeout = 15000) => {
+        let intervalId = null;
+        const failSafe = setTimeout(() => {
+            clearInterval(intervalId);
+            console.warn(`[AI SOLVER] FAILED: waitForElement timed out after ${timeout / 1000}s for '${selector}'`);
+        }, timeout);
 
- /* Mission 1: Infiltrate and Observe.
- *   - On page load, it waits for the problem header to appear.
- *   - It then injects the "Solve with AI" button into the page.
-*/
-( function() {
+        intervalId = setInterval(() => {
+            const el = document.querySelector(selector);
+            if (el) {
+                clearInterval(intervalId);
+                clearTimeout(failSafe);
+                callback(el);
+            }
+        }, 100);
+    };
 
-  const waitForElement = (selector, callback) => {
-    const interval = setInterval(() => {
-      const element = document.querySelector(selector);
-      if (element) {
-        clearInterval(interval);
-        callback(element);
-      }
-    }, 100); // Check every 100ms
-  };
+    // ==========================================================
+    //  LOGIC FOR PROBLEM PAGE
+    // ==========================================================
+    const scrapeProblemData = () => {
+        try {
+            const titleEl = document.querySelector(".problem-statement .title") ||
+                            document.querySelector(".problem-frames-wrapper .title") ||
+                            document.querySelector("div.header > div.title");
 
-  // The main function to inject our button.
-  const injectSolveButton = (targetElement) => {
-    // Prevent injecting the button more than once.
-    if (document.getElementById('ai-solve-button')) {
-      return;
-    }
+            const statementEl = document.querySelector(".problem-statement > div:nth-child(2)");
 
-    const button = document.createElement('button');
-    button.id = 'ai-solve-button';
-    button.textContent = 'Solve with AI';
+            if (!titleEl || !statementEl) {
+                console.error("[AI SOLVER] Scraper: Missing title or statement.");
+                return null;
+            }
 
-    // Basic styling to make the button stand out.
-    Object.assign(button.style, {
-      backgroundColor: '#4CAF50', // A nice green
-      color: 'white',
-      padding: '8px 16px',
-      border: 'none',
-      borderRadius: '4px',
-      cursor: 'pointer',
-      marginLeft: '15px',
-      fontSize: '14px',
-      fontWeight: 'bold'
-    });
-    
-    // Add hover effect
-    button.onmouseover = () => button.style.backgroundColor = '#45a049';
-    button.onmouseout = () => button.style.backgroundColor = '#4CAF50';
+            const title = titleEl.innerText.replace(/^[A-Z1-9]+\.\s*/, "").trim();
+            const statement = statementEl.innerHTML;
 
-    // --- Mission 2: Attach listener for the "Execute on Command" step ---
-    button.addEventListener('click', handleSolveButtonClick);
+            const samples = Array.from(document.querySelectorAll(".sample-test")).map((test) => {
+                const inEl = test.querySelector(".input pre");
+                const outEl = test.querySelector(".output pre");
+                return inEl && outEl ? { input: inEl.innerText, output: outEl.innerText } : null;
+            }).filter(Boolean);
 
-    // The new, correct line that puts the button AFTER
-    targetElement.insertAdjacentElement('afterend', button);
-    
-  };
+            return { title, statement, samples };
+        } catch (err) {
+            console.error("[AI SOLVER] Error during scraping:", err);
+            return null;
+        }
+    };
 
-  // Start the injection process by waiting for the problem title header.
-  waitForElement('div.header > div.title', injectSolveButton);
+    const injectSolveButton = (targetElement) => {
+        if (document.getElementById("ai-solve-button")) return;
 
-})();
-
-
-// --- Mission 2 & 3: Execute on Command and Report to HQ ---
-
-const handleSolveButtonClick = async (event) => {
-  const button = event.target;
-  
-  // Provide immediate user feedback and prevent multiple clicks.
-  button.textContent = 'Analyzing Problem...';
-  button.disabled = true;
-  button.style.backgroundColor = '#f39c12'; // An orange for "in-progress"
-
-  try {
-    const problemData = scrapeProblemData();
-    
-    if (!problemData) {
-        throw new Error("Failed to scrape problem data. Selectors might have changed.");
-    }
-    
-    console.log("--- Scraped Problem Data (Reporting to HQ) ---");
-    console.log(problemData);
-    // In handleSolveButtonClick, after logging the main object:
-    console.log("--- Sample Test Cases ---");
-    console.table(problemData.samples); 
-
-    // --- Mission 3: Report to HQ (background.js) ---
-    chrome.runtime.sendMessage({
-      type: 'solveProblem',
-      data: problemData
-    });
-
-  } catch (error) {
-    console.error("Codeforces AI Solver: Error during scraping.", error);
-    button.textContent = 'Error!';
-    button.style.backgroundColor = '#e74c3c'; // A red for error
-    // Re-enable after a few seconds so the user can try again.
-    setTimeout(() => {
-        resetButtonState(button);
-    }, 3000);
-  }
-};
-
-const scrapeProblemData = () => {
-    try {
-        // The new, more specific line
-        const header = document.querySelector('div.header > div.title > h2');
-        // Example title: "A. Watermelon". We want to remove the "A. " part.
-        const title = header.innerText.replace(/^[A-Z1-9]+\.\s*/, '').trim();
-
-        const problemStatementEl = document.querySelector('.problem-statement > div:nth-child(2)');
-        const statement = problemStatementEl.innerHTML; // Use innerHTML to keep formatting
-
-        const samples = [];
-        const sampleTests = document.querySelectorAll('.sample-test');
-        
-        sampleTests.forEach(test => {
-            const input = test.querySelector('.input pre').innerText;
-            const output = test.querySelector('.output pre').innerText;
-            samples.push({ input, output });
+        const btn = document.createElement("button");
+        btn.id = "ai-solve-button";
+        btn.textContent = "Solve with AI";
+        Object.assign(btn.style, {
+            backgroundColor: "#4CAF50",
+            color: "white",
+            padding: "8px 16px",
+            border: "none",
+            borderRadius: "4px",
+            cursor: "pointer",
+            marginLeft: "15px",
         });
 
-        if (samples.length === 0) {
-            console.warn("Codeforces AI Solver: No sample tests found.");
+        btn.addEventListener("click", handleSolveButtonClick);
+        targetElement.insertAdjacentElement("afterend", btn);
+    };
+
+    // ==========================================================
+    //  CLICK HANDLER FOR SOLVE BUTTON
+    // ==========================================================
+    const handleSolveButtonClick = () => {
+        console.log('[AI SOLVER] Solve button clicked.');
+        const data = scrapeProblemData();
+
+        if (!data) {
+            alert('AI Solver: Failed to scrape problem data.');
+            return;
         }
 
-        return { title, statement, samples };
-    } catch (error) {
-        console.error("Error finding elements on page:", error);
-        return null;
-    }
-};
+        const url = window.location.href;
 
-// --- Mission 4: Await Orders and Act ---
+        // --- Workflow 1: Contest or Gym Problem ---
+        if (url.includes('/contest/') || url.includes('/gym/')) {
+            const match = url.match(/\/(contest|gym)\/(\d+)\/problem\/([A-Z]\d*)/);
+            if (match) {
+                const [_, type, contestId, problemIndex] = match;
+                const submitUrl = `https://codeforces.com/${type}/${contestId}/submit?submittedProblemIndex=${problemIndex}`;
+                console.log(`[AI SOLVER] Contest/Gym workflow detected. Navigating to: ${submitUrl}`);
+                chrome.runtime.sendMessage({
+                    type: 'getSolutionAndPrepareToPaste',
+                    data: data,
+                    submitUrl: submitUrl,
+                });
+                return;
+            }
+        }
 
-const pasteSolution = (code) => {
-  // Codeforces uses the ACE editor. The actual textarea is often hidden and used by the editor's JS.
-  // The most reliable way is often to target the textarea used by ACE.
-  const submissionTextarea = document.querySelector('textarea.ace_text-input');
-  
-  if (submissionTextarea) {
-    submissionTextarea.value = code;
-    
-    // To make sure the ACE editor visually updates, we need to dispatch an input event.
-    // This simulates the user typing and makes the editor "aware" of the change.
-    const event = new Event('input', { bubbles: true, cancelable: true });
-    submissionTextarea.dispatchEvent(event);
-    
-    console.log("--- Solution Pasted Successfully ---");
-  } else {
-    console.error("Codeforces AI Solver: Could not find the submission textarea.");
-    // As a fallback, we could copy to clipboard, but this is a cleaner failure.
-    alert("AI Solver: Could not find the submission box. Please paste the code manually.");
-  }
-};
+        // --- Workflow 2: Problemset Problem ---
+        if (url.includes('/problemset/problem/')) {
+            const submitLink = document.querySelector('a[href$="/submit"], a[href^="submit"]');
+            if (submitLink) {
+                console.log("[AI SOLVER] Problemset workflow detected. Clicking page's submit link.");
+                chrome.runtime.sendMessage({ type: 'getSolutionAndPrepareToPaste', data: data });
+                submitLink.click();
+                return;
+            } else {
+                alert("AI Solver: Could not find the 'Submit' link on the page for this problemset problem.");
+                return;
+            }
+        }
 
-const resetButtonState = (button) => {
-    if (!button) button = document.getElementById('ai-solve-button');
-    if (button) {
-        button.textContent = 'Solve with AI';
-        button.disabled = false;
-        button.style.backgroundColor = '#4CAF50';
-    }
-}
+        // --- Fallback Error ---
+        alert('AI Solver: Could not recognize the URL format (not a contest, gym, or problemset page).');
+    };
 
-// Listen for the final response from background.js
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'solutionResponse') {
-    console.log("--- Orders received from HQ. Pasting solution. ---");
-    pasteSolution(message.code);
-    resetButtonState(); // Reset the button after the job is done.
-  }
-});
+    // ==========================================================
+    //  LOGIC FOR SUBMIT AND STATUS PAGES
+    // ==========================================================
+    const initSubmitPageLogic = () => {
+        console.log("[AI SOLVER] Submit page detected. Initializing logic for pasting and submission tracking.");
+        injectPasterScript();
+
+        const dispatchPasteEvent = (solution) => {
+            if (!solution || typeof solution !== 'string') return;
+            console.log('[AI SOLVER] Dispatching event with solution to the injected script.');
+            window.dispatchEvent(new CustomEvent('pasteSolutionIntoCodeforcesEditor', {
+                detail: { code: solution }
+            }));
+            chrome.storage.local.remove('solutionToPaste');
+        };
+
+        chrome.storage.local.get('solutionToPaste', (result) => {
+            if (result && result.solutionToPaste) {
+                dispatchPasteEvent(result.solutionToPaste);
+            }
+        });
+
+        const storageListener = (changes, namespace) => {
+            if (namespace === 'local' && changes.solutionToPaste) {
+                console.log("[AI SOLVER] Listener detected a solution has arrived.");
+                dispatchPasteEvent(changes.solutionToPaste.newValue);
+                chrome.storage.onChanged.removeListener(storageListener);
+            }
+        };
+
+        chrome.storage.onChanged.addListener(storageListener);
+
+        console.log("[AI SOLVER] Setting up submission tracker.");
+        waitForElement('input[type="submit"][value="Submit"]', (submitButton) => {
+            console.log("[AI SOLVER] Found the final 'Submit' button. Attaching click listener.");
+            submitButton.addEventListener('click', () => {
+                console.log("[AI SOLVER] 'Submit' button clicked! Setting 'isAwaitingVerdict' flag in storage.");
+                chrome.storage.local.set({
+                    isAwaitingVerdict: true,
+                    submissionTimestamp: Date.now()
+                });
+            });
+        });
+    };
+
+    const initStatusPageLogic = () => {
+        console.log('[AI SOLVER] Status page detected. Checking for pending submission.');
+        chrome.storage.local.get('isAwaitingVerdict', (result) => {
+            if (result && result.isAwaitingVerdict) {
+                console.log('[AI SOLVER] "isAwaitingVerdict" flag is true. Searching for the new submission...');
+                waitForElement('.datatable', (table) => {
+                    const firstRow = table.querySelector('tr[data-submission-id]');
+                    if (firstRow) {
+                        const submissionId = firstRow.getAttribute('data-submission-id');
+                        console.log(`[AI SOLVER] Found submission row. Submission ID: ${submissionId}`);
+                        chrome.storage.local.set({
+                            lastSubmissionId: submissionId,
+                            isAwaitingVerdict: false,
+                        }, () => {
+                            console.log('[AI SOLVER] Stored submission ID and reset flag.');
+                        });
+                    } else {
+                        console.error('[AI SOLVER] FAILED: No submission row found.');
+                        chrome.storage.local.set({ isAwaitingVerdict: false });
+                    }
+                });
+            } else {
+                console.log('[AI SOLVER] "isAwaitingVerdict" flag is false or not set.');
+            }
+        });
+    };
+
+    // ==========================================================
+    //  MAIN SCRIPT ROUTER
+    // ==========================================================
+    const main = () => {
+        const url = window.location.href;
+
+        if (url.includes('/submit')) {
+            initSubmitPageLogic();
+        } else if (url.includes('/status') || url.includes('/my')) {
+            initStatusPageLogic();
+        } else if (document.querySelector('.problem-statement')) {
+            waitForElement(
+                ".problem-statement .title, .problem-frames-wrapper .title, div.header > div.title",
+                injectSolveButton
+            );
+        }
+    };
+
+    // Kick things off
+    main();
+})();

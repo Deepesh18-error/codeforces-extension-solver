@@ -1,18 +1,15 @@
-// In the future, we could get this from a .env variable
-
-// const allowedOrigins = ['chrome-extension://YOUR_REAL_ID_HERE'];
-
+// A more robust and clear CORS configuration
 const corsOptions = {
   origin: (origin, callback) => {
+    // Allow requests with no origin (like Postman, server-to-server)
+    // OR requests from any Chrome extension
     if (!origin || origin.startsWith('chrome-extension://')) {
       callback(null, true);
     } else {
-
       callback(new Error('This origin is not allowed by CORS'));
-      
     }
   },
-  optionsSuccessStatus: 200 
+  optionsSuccessStatus: 200 // For legacy browser support
 };
 
 module.exports = corsOptions;

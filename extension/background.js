@@ -1,86 +1,62 @@
+// File: extension/background.js (FINAL ARCHITECTURE - Updated for flexible navigation)
+
+console.log("--- Background Script (HQ) is online. ---");
+
 /**
- * Codeforces AI Solver - Background Script (Service Worker)
- *
- * This script acts as the "Central Hub" or "HQ" for the extension.
- * It is the persistent brain of the application.
- *
- * Phase 1 Responsibilities:
- * 1. Listen for a 'solveProblem' message from the content script.
- * 2. Receive the scraped problem data.
- * 3. Log this data to the console for developer verification (The "Report").
- * 4. Call a "stub" function that returns a hardcoded, placeholder solution.
- * 5. Send this placeholder solution back to the content script that made the request.
+ * Fetches the AI solution from the backend server and, upon success,
+ * stores the solution code in chrome.storage.local for the content script to pick up.
+ * @param {object} problemData - The problem data scraped from the page.
  */
+async function getSolutionAndStoreIt(problemData) {
+  const serverUrl = 'http://localhost:3000/api/solve';
+  console.log(`HQ: Contacting server at ${serverUrl} to solve "${problemData.title}"...`);
+  try {
+    const response = await fetch(serverUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(problemData)
+    });
 
-console.log("--- Background Script (HQ) is online. Awaiting missions. ---");
+    if (!response.ok) {
+      throw new Error(`Server responded with status: ${response.status}`);
+    }
 
-// This is the main listener for all messages coming into the HQ.
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // We use the message 'type' to know what action to take.
-  if (message.type === 'solveProblem') {
-    console.log("--- HQ: 'solveProblem' mission received. ---");
-    console.log("HQ: Report received from agent in tab:", sender.tab.id);
+    const data = await response.json();
 
-    // This function contains our "stubbed" logic for Phase 1.
-    // We've made it async to prepare for Phase 2, where it will make a real network call.
-    handleSolveProblem(message.data)
-      .then(solution => {
-        console.log("HQ: Sending placeholder solution back to the agent.");
-        // Responding to the agent with the result.
-        sendResponse({ code: solution });
-      })
-      .catch(error => {
-        console.error("HQ: An error occurred in the mission.", error);
-        // Send an error response back if something goes wrong.
-        sendResponse({ error: "Failed to process the request." });
-      });
-
-    // IMPORTANT: Return 'true' to indicate that we will be sending a response asynchronously.
-    // This keeps the message channel open until sendResponse() is called.
-    return true;
+    if (data.solution) {
+      console.log("HQ: Solution received. Storing it for the content script to paste.");
+      // Key step: Save the final code to storage. The content script is listening for this.
+      chrome.storage.local.set({ solutionToPaste: data.solution });
+    } else {
+      throw new Error("Server response did not contain a 'solution' key.");
+    }
+  } catch (error) {
+    console.error('HQ: Fetch to backend or storage failed:', error);
+    // If anything fails, we still store an error message so the user sees the problem.
+    chrome.storage.local.set({ solutionToPaste: `// Error: Failed to get solution.\n// Reason: ${error.message}` });
   }
+}
+
+// ==========================================================
+//  Main Message Listener (UPDATED to handle conditional navigation)
+// ==========================================================
+chrome.runtime.onMessage.addListener((message, sender) => {
+    // This is the ONLY message type we expect from the problem page.
+    if (message.type === 'getSolutionAndPrepareToPaste') {
+        
+        // 1. Start the AI fetch process. This runs for both workflows.
+        console.log("HQ: Received mission. Will fetch solution in the background.");
+        getSolutionAndStoreIt(message.data);
+
+        // 2. Conditionally navigate the user's tab.
+        // This ONLY runs if the content script provided a URL (i.e., the "Contest" workflow).
+        if (message.submitUrl) {
+            console.log("HQ: Navigating user's tab to a specific URL provided by content script.");
+            chrome.tabs.update(sender.tab.id, { url: message.submitUrl });
+        } else {
+            // For the "Problemset" workflow, the content script handles the navigation by clicking a link,
+            // so the background script does nothing here.
+            console.log("HQ: No submitUrl provided. Navigation is being handled by the content script.");
+        }
+    }
 });
-
-/**
- * The API Call Stub for Phase 1.
- * In later phases, this function will contain the `fetch()` call to our actual backend server.
- *
- * @param {object} problemData - The data object scraped from the content script.
- * @returns {Promise<string>} A promise that resolves with a hardcoded solution string.
- */
-async function handleSolveProblem(problemData) {
-  // Task 1: Print the data to the console for verification.
-  console.log("--- HQ: Verifying received data from agent ---");
-  console.log("Title:", problemData.title);
-  console.log("Sample Tests Found:", problemData.samples.length);
-  // You can uncomment the line below for full details during debugging
-  // console.log("Full Data:", problemData);
-
-  // Task 2: Return a hardcoded, placeholder string of code.
-  // We add a small delay to simulate a network request, making the UI feedback feel more real.
-  await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
-
-  const placeholderSolution = `// This is a placeholder solution from the Phase 1 HQ (background.js)
-// Problem Title: ${problemData.title}
-//
-// In Phase 2, this code will be generated by a real AI!
-
-#include <iostream>
-#include <vector>
-#include <string>
-
-void solve() {
-    // The logic to solve "${problemData.title}" will be generated here.
-    std::cout << "Hello, World!" << std::endl;
-}
-
-int main() {
-    std::ios_base::sync_with_stdio(false);
-    std::cin.tie(NULL);
-    solve();
-    return 0;
-}
-`;
-
-  return placeholderSolution;
-}

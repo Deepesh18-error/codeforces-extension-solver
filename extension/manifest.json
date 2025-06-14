@@ -23,13 +23,28 @@
     {
       "matches": [
         "https://codeforces.com/problemset/problem/*/*",
-        "https://codeforces.com/contest/*/problem/*"
+        "https://codeforces.com/contest/*/problem/*",
+        "https://codeforces.com/gym/*/problem/*",
+        "https://codeforces.com/problemset/submit*",
+        "https://codeforces.com/contest/*/submit*",
+        "https://codeforces.com/gym/*/submit*",
+        "https://codeforces.com/submission/*",
+        "https://codeforces.com/contest/*/submission/*",
+        "https://codeforces.com/gym/*/submission/*"
       ],
-      "js": ["content_script.js"]
+      "js": ["content_script.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injector.js"],
+      "matches": ["https://codeforces.com/*"]
     }
   ],
   "permissions": [
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "https://codeforces.com/*",
