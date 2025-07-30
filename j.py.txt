@@ -1,0 +1,26 @@
+import os
+
+# List of code file extensions to include
+CODE_EXTENSIONS = ['.py', '.js', '.ts', '.java', '.cpp', '.c', '.cs', '.rb', '.go', '.php', '.html', '.css']
+
+def should_include_file(filepath):
+    # Exclude anything in node_modules
+    return 'node_modules' not in filepath and os.path.splitext(filepath)[1] in CODE_EXTENSIONS
+
+def main():
+    for root, dirs, files in os.walk('.'):
+        # Skip node_modules directories
+        dirs[:] = [d for d in dirs if d != 'node_modules']
+        for file in files:
+            filepath = os.path.join(root, file)
+            if should_include_file(filepath):
+                txt_filename = filepath + '.txt'
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as src, open(txt_filename, 'w', encoding='utf-8') as dst:
+                        dst.write(src.read())
+                    print(f'Created: {txt_filename}')
+                except Exception as e:
+                    print(f'Error processing {filepath}: {e}')
+
+if __name__ == '__main__':
+    main()

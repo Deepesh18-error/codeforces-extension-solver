@@ -1,13 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Drive Codeforces",
-  "version": "0.1.0",
-  "description": "An extension to help solve Codeforces problems using AI.",
+  "version": "1.0.0",
+  "description": "An extension to solve Codeforces problems using AI and provide real-time verdict highlighting.",
+
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
@@ -16,38 +18,46 @@
     "default_title": "Drive Codeforces",
     "default_popup": "popup.html"
   },
+
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
+
+    "content_scripts": [
     {
       "matches": [
-        "https://codeforces.com/problemset/problem/*/*",
+        "https://codeforces.com/problemset/problem/*",
         "https://codeforces.com/contest/*/problem/*",
         "https://codeforces.com/gym/*/problem/*",
-        "https://codeforces.com/problemset/submit*",
+        "https://codeforces.com/problemset/submit",
         "https://codeforces.com/contest/*/submit*",
         "https://codeforces.com/gym/*/submit*",
-        "https://codeforces.com/submission/*",
-        "https://codeforces.com/contest/*/submission/*",
-        "https://codeforces.com/gym/*/submission/*"
+        "https://codeforces.com/problemset/status*",
+        "https://codeforces.com/contest/*/status*",
+        "https://codeforces.com/gym/*/status*",
+        "https://codeforces.com/submissions/*",
+        "https://codeforces.com/my",
+        "https://codeforces.com/contest/*/my*"
       ],
       "js": ["content_script.js"],
-      "run_at": "document_idle"
+      "css": ["style.css"]
     }
   ],
+  
   "web_accessible_resources": [
     {
       "resources": ["injector.js"],
-      "matches": ["https://codeforces.com/*"]
+      "matches": ["*://codeforces.com/*"]
     }
   ],
+
   "permissions": [
     "storage",
     "tabs"
   ],
+  
   "host_permissions": [
-    "https://codeforces.com/*",
+    "*://codeforces.com/*",
     "http://localhost:3000/"
   ]
 }

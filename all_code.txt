@@ -1,3 +1,98 @@
+--- .\j.py ---
+import os
+
+# List of code file extensions to include
+CODE_EXTENSIONS = ['.py', '.js', '.ts', '.java', '.cpp', '.c', '.cs', '.rb', '.go', '.php', '.html', '.css']
+
+def should_include_file(filepath):
+    # Exclude anything in node_modules
+    return 'node_modules' not in filepath and os.path.splitext(filepath)[1] in CODE_EXTENSIONS
+
+def main():
+    with open('all_code.txt', 'w', encoding='utf-8') as out_file:
+        for root, dirs, files in os.walk('.'):
+            # Skip node_modules directories
+            dirs[:] = [d for d in dirs if d != 'node_modules']
+            for file in files:
+                filepath = os.path.join(root, file)
+                if should_include_file(filepath):
+                    try:
+                        with open(filepath, 'r', encoding='utf-8') as src:
+                            out_file.write(f'--- {filepath} ---\n')
+                            out_file.write(src.read())
+                            out_file.write('\n\n')
+                        print(f'Added: {filepath}')
+                    except Exception as e:
+                        print(f'Error processing {filepath}: {e}')
+
+if __name__ == '__main__':
+    main()
+
+--- .\extension\background.js ---
+// File: extension/background.js (FINAL ARCHITECTURE - Updated for flexible navigation)
+
+console.log("--- Background Script (HQ) is online. ---");
+
+/**
+ * Fetches the AI solution from the backend server and, upon success,
+ * stores the solution code in chrome.storage.local for the content script to pick up.
+ * @param {object} problemData - The problem data scraped from the page.
+ */
+async function getSolutionAndStoreIt(problemData) {
+  const serverUrl = 'http://localhost:3000/api/solve';
+  console.log(`HQ: Contacting server at ${serverUrl} to solve "${problemData.title}"...`);
+  try {
+    const response = await fetch(serverUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(problemData)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server responded with status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.solution) {
+      console.log("HQ: Solution received. Storing it for the content script to paste.");
+      // Key step: Save the final code to storage. The content script is listening for this.
+      chrome.storage.local.set({ solutionToPaste: data.solution });
+    } else {
+      throw new Error("Server response did not contain a 'solution' key.");
+    }
+  } catch (error) {
+    console.error('HQ: Fetch to backend or storage failed:', error);
+    // If anything fails, we still store an error message so the user sees the problem.
+    chrome.storage.local.set({ solutionToPaste: `// Error: Failed to get solution.\n// Reason: ${error.message}` });
+  }
+}
+
+// ==========================================================
+//  Main Message Listener (UPDATED to handle conditional navigation)
+// ==========================================================
+chrome.runtime.onMessage.addListener((message, sender) => {
+    // This is the ONLY message type we expect from the problem page.
+    if (message.type === 'getSolutionAndPrepareToPaste') {
+        
+        // 1. Start the AI fetch process. This runs for both workflows.
+        console.log("HQ: Received mission. Will fetch solution in the background.");
+        getSolutionAndStoreIt(message.data);
+
+        // 2. Conditionally navigate the user's tab.
+        // This ONLY runs if the content script provided a URL (i.e., the "Contest" workflow).
+        if (message.submitUrl) {
+            console.log("HQ: Navigating user's tab to a specific URL provided by content script.");
+            chrome.tabs.update(sender.tab.id, { url: message.submitUrl });
+        } else {
+            // For the "Problemset" workflow, the content script handles the navigation by clicking a link,
+            // so the background script does nothing here.
+            console.log("HQ: No submitUrl provided. Navigation is being handled by the content script.");
+        }
+    }
+});
+
+--- .\extension\content_script.js ---
 
 // File: extension/content_script.js (FINAL, with Robust URL Handling)
 (() => {
@@ -46,9 +141,9 @@
         }, 100);
     };
 
-
+    // ==========================================================
     //  LOGIC FOR PROBLEM PAGE
-
+    // ==========================================================
     const scrapeProblemData = () => {
         try {
             const titleEl = document.querySelector(".problem-statement .title") ||
@@ -98,9 +193,9 @@
         targetElement.insertAdjacentElement("afterend", btn);
     };
 
-
+    // ==========================================================
     //  CLICK HANDLER FOR SOLVE BUTTON
-
+    // ==========================================================
     const handleSolveButtonClick = () => {
         console.log('[AI SOLVER] Solve button clicked.');
         const data = scrapeProblemData();
@@ -146,9 +241,9 @@
         alert('AI Solver: Could not recognize the URL format (not a contest, gym, or problemset page).');
     };
 
-
+    // ==========================================================
     //  LOGIC FOR SUBMIT AND STATUS PAGES
-
+    // ==========================================================
     const initSubmitPageLogic = () => {
         console.log("[AI SOLVER] Submit page detected. Initializing logic for pasting and submission tracking.");
         injectPasterScript();
@@ -194,9 +289,12 @@
     // REPLACE your current initStatusPageLogic with this correct version
 
 // REPLACED FUNCTION
+// ==========================================================
 //  START OF THE FINAL CORRECTED FUNCTION
-
-
+// ==========================================================
+// ==========================================================
+//  START OF THE FINAL, BULLETPROOF FUNCTION
+// ==========================================================
 const initStatusPageLogic = () => {
     // Stage 1: Wait for the main content container of the entire page.
     // This ensures the page is ready for us to look for more specific elements.
@@ -235,9 +333,9 @@ const initStatusPageLogic = () => {
         });
     });
 };
-
+// ==========================================================
 //  END OF THE FINAL, BULLETPROOF FUNCTION
-
+// ==========================================================
 
 
     const initVerdictHighlighter = (submissionIdToTrack = null) => {
@@ -310,9 +408,9 @@ const initStatusPageLogic = () => {
 
                 let isUserSubmission = false;
                 
-
+                // =================================================================
                 // <<< FIX #1: This check is now universal for all "My Submissions" pages.
-
+                // =================================================================
                 const onMySubmissionsPage = window.location.href.includes('my=on') || window.location.pathname.endsWith('/my');
 
                 if (onMySubmissionsPage) {
@@ -321,9 +419,9 @@ const initStatusPageLogic = () => {
                 } else {
                     const loggedInUser = getLoggedInUser();
                     
-
+                    // =================================================================
                     // <<< FIX #2: Using the correct selector to find the author's name.
-
+                    // =================================================================
                     const authorElement = trackedRow.querySelector('td.status-party-cell a');
                     
                     const submissionAuthor = authorElement ? authorElement.textContent.trim() : null;
@@ -413,9 +511,9 @@ const initStatusPageLogic = () => {
         button.textContent = 'Copy Input'; // More user-friendly text
         button.title = 'Copy the failing test case input to clipboard';
 
-
+        // =================================================================
         // <<< TASK 1 IMPLEMENTATION: Add click listener to copy data.
-
+        // =================================================================
         button.addEventListener('click', (e) => {
             // Prevent the click from navigating or triggering other events on the row.
             e.preventDefault();
@@ -426,10 +524,10 @@ const initStatusPageLogic = () => {
                 // On success, provide permanent feedback to the user.
                 button.textContent = 'Copied!';
                 
-
+                // =================================================================
                 // <<< TASK 2 IMPLEMENTATION: The setTimeout is removed.
                 // The button text will now stay as "Copied!" permanently.
-
+                // =================================================================
             }).catch(err => {
                 // In case of an error (e.g., browser permissions), log it.
                 console.error('[AI SOLVER] Could not copy text: ', err);
@@ -450,9 +548,9 @@ const initStatusPageLogic = () => {
     }
 };
 
-
+    // =================================================================
     // <<< FIX #3: A more robust selector for finding the table body.
-
+    // =================================================================
     const tableBody = document.querySelector('.datatable tbody');
     if (!tableBody) {
         console.error('[AI SOLVER] Could not find the submission table body. Extension will not run.');
@@ -470,8 +568,10 @@ const initStatusPageLogic = () => {
     console.log('[AI SOLVER] Extension loaded and actively monitoring submissions.');
 };
 
-    //  MAIN SCRIPT ROUTER
 
+    // ==========================================================
+    //  MAIN SCRIPT ROUTER
+    // ==========================================================
 // --- AFTER THE FIX ---
 const main = () => {
     const url = window.location.href;
@@ -493,3 +593,447 @@ const main = () => {
     // Kick things off
     main();
 })();
+
+--- .\extension\injector.js ---
+// File: extension/injector.js
+// This script runs in the page's own context, not the isolated content script world.
+// It has direct access to the page's 'window' object, including the 'ace' editor.
+
+window.addEventListener('pasteSolutionIntoCodeforcesEditor', (event) => {
+    const codeToPaste = event.detail.code;
+    if (!codeToPaste) return;
+
+    try {
+        // This is the command that MUST run in the page's context.
+        const editor = window.ace.edit('editor');
+        if (editor) {
+            editor.setValue(codeToPaste, 1); // 1 moves cursor to end
+            editor.clearSelection();
+            console.log('[INJECTED SCRIPT] Successfully pasted code via ACE API.');
+        } else {
+             console.error('[INJECTED SCRIPT] Could not get ACE editor instance.');
+        }
+    } catch (e) {
+        console.error('[INJECTED SCRIPT] Error while pasting:', e);
+    }
+});
+
+--- .\extension\popup.css ---
+/* Styling for the extension's popup window */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    width: 250px; /* A standard width for popups */
+    padding: 10px 15px;
+    text-align: center;
+    background-color: #f4f6f9;
+    margin: 0;
+}
+
+h1 {
+    font-size: 16px;
+    color: #333;
+    margin: 0 0 10px 0;
+}
+
+p {
+    font-size: 13px;
+    color: #555;
+    margin: 0;
+}
+
+hr {
+    border: 0;
+    height: 1px;
+    background-color: #e0e0e0;
+    margin: 15px 0;
+}
+
+.status {
+    font-size: 12px;
+    color: #777;
+}
+
+--- .\extension\popup.html ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Codeforces AI Solver</title>
+    <!-- Link to our dedicated stylesheet -->
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <h1>Codeforces AI Solver</h1>
+    <p>The "Solve with AI" button is automatically injected on problem pages.</p>
+    
+    <hr>
+
+    <p class="status">Version 0.1.0</p>
+
+    <!-- Link to our dedicated logic script -->
+    <script src="popup.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+--- .\extension\popup.js ---
+/**
+ * popup.js
+ * 
+ * Handles the logic for the extension's popup window.
+ * 
+ * Phase 1 Responsibilities:
+ * - None, as there are no interactive elements in the popup yet.
+ * 
+ * Future Responsibilities (as per the mind map):
+ * - Handle clicks on buttons (e.g., a "Settings" button).
+ * - Send messages to the background script or content scripts.
+ */
+
+// This event listener waits for the popup's HTML to be fully loaded
+// before running any code. It's a best practice.
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("Popup opened and its script is running.");
+
+    // In the future, we would add our event listeners here.
+    // For example:
+    // const settingsButton = document.getElementById('settings-btn');
+    // settingsButton.addEventListener('click', () => {
+    //   chrome.runtime.sendMessage({ type: 'openSettings' });
+    // });
+});
+
+--- .\extension\style.css ---
+/* 
+ * =======================================================
+ *  Codeforces Verdict Highlighter Styles (CORRECTED)
+ * =======================================================
+ */
+
+/* =================================================================
+ *  <<< FIX: All 'td' selectors are now more specific to win CSS conflicts.
+ * ================================================================= */
+
+/*
+ * Phase 1: The initial "tracking" style.
+ */
+.cf-highlighter-tracking {
+  border: 2px solid #333333 !important;
+  transition: border 0.3s ease-in-out;
+}
+
+/* CORRECTED SELECTOR for the background color */
+.status-frame-datatable tr.cf-highlighter-tracking td {
+  background-color: #f5f5f5 !important; 
+  transition: background-color 0.3s ease-in-out;
+}
+
+/* 
+ * Phase 2 Final State: Accepted Verdict
+ */
+.cf-highlighter-accepted {
+  border: 2px solid #009900 !important;
+}
+
+/* CORRECTED SELECTOR for the background color */
+.status-frame-datatable tr.cf-highlighter-accepted td {
+  background-color: #e8f8e8 !important;
+}
+
+/* 
+ * Phase 2 Final State: Rejected Verdict (WA, TLE, etc.)
+ */
+.cf-highlighter-rejected {
+  border: 2px solid #d10000 !important;
+}
+
+/* CORRECTED SELECTOR for the background color */
+.status-frame-datatable tr.cf-highlighter-rejected td {
+  background-color: #fff0f0 !important;
+}
+
+
+/* --- Other styles remain the same, they are not part of the issue --- */
+
+.cf-highlighter-status-indicator {
+  color: #888888;
+  font-style: italic;
+  font-size: 0.9em;
+}
+
+.cf-highlighter-copy-btn {
+  margin-left: 8px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #3B5998;
+  background-color: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 3px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: all 0.2s ease;
+}
+
+.cf-highlighter-copy-btn:hover {
+  background-color: #e8e8e8;
+  border-color: #aaaaaa;
+}
+
+--- .\server\index.js ---
+// File: server/index.js (The new, cleaner version)
+
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const corsOptions = require('./config/corsOptions');
+
+// Import our new router
+const solveRoutes = require('./routes/solveRoutes');
+
+const app = express();
+
+// --- MIDDLEWARE SETUP ---
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// --- API ENDPOINTS / ROUTES ---
+
+// A simple test route to make sure the server is alive
+app.get('/', (req, res) => {
+  res.send('Backend Server is alive!');
+});
+
+// Use the solveRoutes for any request to /api/solve
+app.use('/api/solve', solveRoutes);
+
+// --- START THE SERVER ---
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+--- .\server\config\corsOptions.js ---
+// A more robust and clear CORS configuration
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like Postman, server-to-server)
+    // OR requests from any Chrome extension
+    if (!origin || origin.startsWith('chrome-extension://')) {
+      callback(null, true);
+    } else {
+      callback(new Error('This origin is not allowed by CORS'));
+    }
+  },
+  optionsSuccessStatus: 200 // For legacy browser support
+};
+
+module.exports = corsOptions;
+
+--- .\server\routes\solveRoutes.js ---
+// File: server/routes/solveRoutes.js (FINAL, REFINED & CONFIRMED)
+
+const express = require('express');
+const router = express.Router();
+const { getAiSolution } = require('../services/aiService');
+
+// This route handles all POST requests to /api/solve from the extension.
+router.post('/', async (req, res) => {
+  console.log('--- Request received at /api/solve ---');
+
+  // 1. Validate the incoming request body to ensure it has the required data.
+  const problemData = req.body;
+  if (!problemData || !problemData.title || !problemData.statement) {
+    console.error('Validation Failed: Request body is missing title or statement.');
+    // If validation fails, send a "400 Bad Request" response and stop.
+    return res.status(400).json({ error: 'Invalid request body. Missing title or statement.' });
+  }
+
+  console.log(`Received request for problem: "${problemData.title}"`);
+
+  // 2. Call the AI service inside a try...catch block.
+  // This is the server's safety net that prevents it from crashing if the AI call fails.
+  try {
+    // We await the solution from our resilient aiService.
+    const solutionCode = await getAiSolution(problemData);
+    
+    // If successful, package the solution into the standard JSON response format.
+    const responsePayload = {
+      solution: solutionCode
+    };
+
+    console.log('--- Successfully generated solution. Sending 200 OK response. ---');
+    res.status(200).json(responsePayload);
+
+  } catch (error) {
+    // This block executes ONLY if getAiSolution throws an error.
+    console.error("--- Error in /api/solve handler. The AI service failed. Sending 500 Internal Server Error. ---");
+    console.error("Error details from AI Service:", error.message);
+
+    // Send a structured error message back to the Chrome extension.
+    res.status(500).json({ 
+      error: "An internal server error occurred on the server while contacting the AI.",
+      details: error.message // This includes the specific reason (e.g., model not found, safety block).
+    });
+  }
+});
+
+module.exports = router;
+
+--- .\server\services\aiService.js ---
+// File: server/services/aiService.js (FINAL - Corrected Model Name)
+
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { buildOptimalPrompt } = require('./promptBuilder');
+const { parseCodeFromResponse } = require('./responseParser');
+
+// Initialize the Google AI Client
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+/**
+ * The main service function. It orchestrates the entire process of getting a solution.
+ * @param {object} problemData - The scraped data from the extension.
+ * @returns {Promise<string>} A promise that resolves with the final, clean AI-generated code.
+ */
+async function getAiSolution(problemData) {
+  // The entire function is wrapped in a try...catch to handle any unexpected errors,
+  // especially from the API call.
+  try {
+    // 1. Build the optimal prompt.
+    const prompt = buildOptimalPrompt(problemData);
+    console.log("AI_Service: Prompt built successfully.");
+
+    // 2. Call the AI library's function.
+    // --- THIS IS THE ONLY LINE THAT HAS BEEN CHANGED ---
+    const modelName = "gemini-1.5-flash-latest"; // Using a stable, recommended model name.
+    
+    console.log(`AI_Service: Using Google Gemini model: ${modelName}`);
+    console.log("AI_Service: Sending request to Google Gemini...");
+    
+    const model = genAI.getGenerativeModel({ model: modelName });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    
+    // This critical check handles cases where Gemini blocks the response for safety.
+    if (!response || !response.text()) {
+        const finishReason = response?.promptFeedback?.blockReason || 'No content';
+        const safetyRatings = response?.candidates?.[0]?.safetyRatings || 'N/A';
+        console.error(`AI_Service: Gemini response was empty or blocked. Reason: ${finishReason}`);
+        console.error(`AI_Service: Safety Ratings: ${JSON.stringify(safetyRatings)}`);
+        // We throw a specific error that the route handler can catch.
+        throw new Error(`The AI service returned an empty or blocked response. Reason: ${finishReason}`);
+    }
+    
+    const rawSolution = response.text();
+    console.log("AI_Service: Response received from Google Gemini.");
+
+    // 3. Get the code back by refining and cleaning it.
+    const cleanSolution = parseCodeFromResponse(rawSolution);
+    return cleanSolution;
+
+  } catch (error) {
+    // This block catches errors from the API call (e.g., network issues, invalid API key)
+    // or the custom error we threw above for safety blocks.
+    console.error("AI_Service: An error occurred within getAiSolution:", error.message);
+    
+    // Re-throw the error so the calling function (solveRoutes.js) knows something went wrong.
+    throw error;
+  }
+}
+
+module.exports = { getAiSolution };
+
+--- .\server\services\promptBuilder.js ---
+// File: server/services/promptBuilder.js
+
+/**
+ * Builds a high-quality, optimal prompt to send to the Gemini model,
+ * incorporating role-playing, constraints, the problem statement, and formatting rules.
+ * @param {object} problemData - The scraped data from the extension.
+ * @returns {string} The fully-formed prompt string.
+ */
+function buildOptimalPrompt(problemData) {
+  // 1. Role Playing: Prime the AI to act as an expert.
+  const rolePlaying = "You are a world-class competitive programmer and an expert C++ algorithmist. You are known for writing clean, efficient, and correct code.";
+
+  // 2. The Task & Constraints: Give clear, direct instructions.
+  const taskAndConstraints = "Your task is to solve the following programming problem. The solution must be a single, complete, runnable C++ program that reads from standard input and writes to standard output.";
+  
+  // 3. Formatting Instructions: This is crucial for easy parsing.
+  const formatting = "Your response MUST contain ONLY the C++ code. Do not include any introductory text, explanations, analysis, or concluding remarks. The entire response should be the raw source code, optionally inside a ```cpp markdown block.";
+
+  // 4. Assembling the context from the problem data.
+  const problemContext = `
+--- PROBLEM TITLE ---
+${problemData.title}
+
+--- PROBLEM STATEMENT ---
+${problemData.statement}
+
+--- SAMPLE CASES ---
+${problemData.samples.map((sample, index) => `
+Sample Input ${index + 1}:
+${sample.input}
+Sample Output ${index + 1}:
+${sample.output}`).join('\n')}
+`;
+
+  // Combine all parts into the final prompt.
+  const finalPrompt = `
+${rolePlaying}
+
+${taskAndConstraints}
+
+${formatting}
+${problemContext}
+--- YOUR C++ SOLUTION CODE ---
+`;
+
+  return finalPrompt.trim();
+}
+
+module.exports = { buildOptimalPrompt };
+
+--- .\server\services\responseParser.js ---
+// File: server/services/responseParser.js
+
+/**
+ * Cleans the raw text response from the AI to extract only the C++ code block.
+ * It intelligently handles markdown blocks and other conversational text.
+ * @param {string} rawResponse - The text response from the Gemini API.
+ * @returns {string} The cleaned, pure C++ code.
+ */
+function parseCodeFromResponse(rawResponse) {
+  if (!rawResponse) {
+    return "// Error: Received an empty or null response from the AI.";
+  }
+
+  // Priority 1: Look for a C++ markdown block (```cpp ... ```)
+  const cppBlockMatch = rawResponse.match(/```cpp([\s\S]*?)```/);
+  if (cppBlockMatch && cppBlockMatch[1]) {
+    return cppBlockMatch[1].trim();
+  }
+
+  // Priority 2: Look for a generic markdown block (``` ... ```)
+  const genericBlockMatch = rawResponse.match(/```([\s\S]*?)```/);
+  if (genericBlockMatch && genericBlockMatch[1]) {
+    // Sometimes a generic block might still have a language hint on the first line.
+    // e.g., ```c++\n#include...
+    const code = genericBlockMatch[1];
+    return code.replace(/^(cpp|c\+\+)\s*\n/, '').trim(); // Remove the language hint if it exists
+  }
+
+  // Priority 3: If no markdown block is found, assume the entire response is code.
+  // This is a fallback in case the AI doesn't follow formatting instructions perfectly.
+  return rawResponse.trim();
+}
+
+module.exports = { parseCodeFromResponse };
+

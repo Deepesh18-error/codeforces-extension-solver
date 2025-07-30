@@ -1,0 +1,75 @@
+/* 
+ * =======================================================
+ *  Codeforces Verdict Highlighter Styles (CORRECTED)
+ * =======================================================
+ */
+
+/* =================================================================
+ *  <<< FIX: All 'td' selectors are now more specific to win CSS conflicts.
+ * ================================================================= */
+
+/*
+ * Phase 1: The initial "tracking" style.
+ */
+.cf-highlighter-tracking {
+  border: 2px solid #333333 !important;
+  transition: border 0.3s ease-in-out;
+}
+
+/* CORRECTED SELECTOR for the background color */
+.status-frame-datatable tr.cf-highlighter-tracking td {
+  background-color: #f5f5f5 !important; 
+  transition: background-color 0.3s ease-in-out;
+}
+
+/* 
+ * Phase 2 Final State: Accepted Verdict
+ */
+.cf-highlighter-accepted {
+  border: 2px solid #009900 !important;
+}
+
+/* CORRECTED SELECTOR for the background color */
+.status-frame-datatable tr.cf-highlighter-accepted td {
+  background-color: #e8f8e8 !important;
+}
+
+/* 
+ * Phase 2 Final State: Rejected Verdict (WA, TLE, etc.)
+ */
+.cf-highlighter-rejected {
+  border: 2px solid #d10000 !important;
+}
+
+/* CORRECTED SELECTOR for the background color */
+.status-frame-datatable tr.cf-highlighter-rejected td {
+  background-color: #fff0f0 !important;
+}
+
+
+/* --- Other styles remain the same, they are not part of the issue --- */
+
+.cf-highlighter-status-indicator {
+  color: #888888;
+  font-style: italic;
+  font-size: 0.9em;
+}
+
+.cf-highlighter-copy-btn {
+  margin-left: 8px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #3B5998;
+  background-color: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 3px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: all 0.2s ease;
+}
+
+.cf-highlighter-copy-btn:hover {
+  background-color: #e8e8e8;
+  border-color: #aaaaaa;
+}
