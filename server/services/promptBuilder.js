@@ -46,4 +46,56 @@ ${problemContext}
   return finalPrompt.trim();
 }
 
-module.exports = { buildOptimalPrompt };
+// CORRECTED FUNCTION
+// REPLACED FUNCTION in promptBuilder.js
+
+function buildDebugPrompt(debugContext) {
+  const { problem, failedAttempt } = debugContext;
+  const { code, failureDetails } = failedAttempt;
+
+  const rolePlaying = "You are an expert C++ competitive programmer and a master debugger. Your primary skill is finding subtle bugs in code and fixing them.";
+
+  // --- IMPROVED INSTRUCTIONS ---
+  const taskAndConstraints = "CRITICAL MISSION: Your previous C++ solution, provided below, FAILED on a hidden test case. I have provided you with the exact test case data. Your task is to meticulously analyze WHY your code failed and provide a CORRECTED, different solution. DO NOT provide the same code again. You must identify the logical error and fix it. Your response MUST contain ONLY the corrected C++ code, and nothing else.";
+  
+  let checkerLogContext = '';
+  if (failureDetails.checkerLog && failureDetails.checkerLog.trim() && failureDetails.checkerLog !== '[Not Available]') {
+      checkerLogContext = `
+--- CHECKER LOG (This is a huge clue!) ---
+${failureDetails.checkerLog}
+`;
+  }
+
+  const context = `
+--- ORIGINAL PROBLEM STATEMENT ---
+Title: ${problem.title}
+${problem.statement}
+
+--- YOUR PREVIOUS FAILED CODE (THIS CODE IS WRONG) ---
+\`\`\`cpp
+${code}
+\`\`\`
+
+--- FAILED TEST CASE ANALYSIS (Your code failed with this data) ---
+Input:
+${failureDetails.input}
+
+Your Code's Incorrect Output:
+${failureDetails.output}
+
+Expected Correct Answer:
+${failureDetails.answer}
+${checkerLogContext}
+--- YOUR NEW, CORRECTED, AND COMPLETE C++ SOLUTION ---
+`;
+
+  return `
+${rolePlaying}
+
+${taskAndConstraints}
+${context}
+  `.trim();
+}
+
+// UPDATE module.exports
+module.exports = { buildOptimalPrompt, buildDebugPrompt };

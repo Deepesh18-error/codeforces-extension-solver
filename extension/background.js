@@ -1,10 +1,9 @@
-// File: extension/background.js (FINAL ARCHITECTURE - Updated for flexible navigation)
+// File: extension/background.js (DEFINITIVE, FULLY CORRECTED VERSION)
 
 console.log("--- Background Script (HQ) is online. ---");
 
 /**
- * Fetches the AI solution from the backend server and, upon success,
- * stores the solution code in chrome.storage.local for the content script to pick up.
+ * Fetches the INITIAL AI solution from the backend server.
  * @param {object} problemData - The problem data scraped from the page.
  */
 async function getSolutionAndStoreIt(problemData) {
@@ -24,39 +23,81 @@ async function getSolutionAndStoreIt(problemData) {
     const data = await response.json();
 
     if (data.solution) {
-      console.log("HQ: Solution received. Storing it for the content script to paste.");
-      // Key step: Save the final code to storage. The content script is listening for this.
-      chrome.storage.local.set({ solutionToPaste: data.solution });
+      console.log("HQ: Initial solution received. Storing for pasting and for debug context.");
+      // For the first solution, we set BOTH storage keys. This was the critical fix.
+      chrome.storage.local.set({ 
+          solutionToPaste: data.solution,
+          debugging_context_lastCode: data.solution 
+      });
     } else {
       throw new Error("Server response did not contain a 'solution' key.");
     }
   } catch (error) {
-    console.error('HQ: Fetch to backend or storage failed:', error);
-    // If anything fails, we still store an error message so the user sees the problem.
+    console.error('HQ: Fetch to backend for initial solve failed:', error);
     chrome.storage.local.set({ solutionToPaste: `// Error: Failed to get solution.\n// Reason: ${error.message}` });
   }
 }
 
+/**
+ * Fetches a DEBUGGED AI solution from the backend and stores it for pasting.
+ * @param {object} debugContext - The full context including problem, failed code, and failure details.
+ */
+async function getDebuggedSolution(debugContext) {
+  const serverUrl = 'http://localhost:3000/api/debug'; // The new endpoint
+  console.log(`HQ: Contacting server at ${serverUrl} to debug the problem...`);
+  try {
+    const response = await fetch(serverUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(debugContext)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server responded with status: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (data.solution) {
+      console.log("HQ: Debugged solution received. Storing for pasting and updating debug context.");
+      // For a debugged solution, we update BOTH keys again.
+      chrome.storage.local.set({ 
+          solutionToPaste: data.solution,
+          debugging_context_lastCode: data.solution 
+      });
+    } else {
+      throw new Error("Server response did not contain a 'solution' key.");
+    }
+  } catch (error) {
+    console.error('HQ: Fetch to backend for debug failed:', error);
+    chrome.storage.local.set({ solutionToPaste: `// Error: Failed to get debugged solution.\n// Reason: ${error.message}` });
+  }
+}
+
 // ==========================================================
-//  Main Message Listener (UPDATED to handle conditional navigation)
+//  Main Message Listener (UPDATED to handle all message types)
 // ==========================================================
 chrome.runtime.onMessage.addListener((message, sender) => {
-    // This is the ONLY message type we expect from the problem page.
+    
+    // Handler for the original "Solve" request
     if (message.type === 'getSolutionAndPrepareToPaste') {
         
-        // 1. Start the AI fetch process. This runs for both workflows.
-        console.log("HQ: Received mission. Will fetch solution in the background.");
+        console.log("HQ: Received 'Solve' mission. Will fetch solution in the background.");
         getSolutionAndStoreIt(message.data);
 
-        // 2. Conditionally navigate the user's tab.
-        // This ONLY runs if the content script provided a URL (i.e., the "Contest" workflow).
         if (message.submitUrl) {
             console.log("HQ: Navigating user's tab to a specific URL provided by content script.");
             chrome.tabs.update(sender.tab.id, { url: message.submitUrl });
         } else {
-            // For the "Problemset" workflow, the content script handles the navigation by clicking a link,
-            // so the background script does nothing here.
-            console.log("HQ: No submitUrl provided. Navigation is being handled by the content script.");
+            console.log("HQ: No submitUrl provided. Navigation handled by content script.");
         }
+        return; // Good practice to return after handling a message
+    }
+
+    // Handler for the new "Debug" request
+    if (message.type === 'requestDebugSolution') {
+        console.log("HQ: Received 'Debug' mission. Will contact server with failure context.");
+        getDebuggedSolution(message.data);
+        return; // Good practice to return after handling a message
     }
 });

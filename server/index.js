@@ -1,12 +1,12 @@
-// File: server/index.js (The new, cleaner version)
+// File: server/index.js (FINAL, CORRECTED VERSION)
 
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const corsOptions = require('./config/corsOptions');
 
-// Import our new router
-const solveRoutes = require('./routes/solveRoutes');
+// Import our router
+const apiRoutes = require('./routes/solveRoutes'); // Rename for clarity
 
 const app = express();
 
@@ -21,8 +21,9 @@ app.get('/', (req, res) => {
   res.send('Backend Server is alive!');
 });
 
-// Use the solveRoutes for any request to /api/solve
-app.use('/api/solve', solveRoutes);
+// Use the apiRoutes for any request that starts with /api
+// This is the key change.
+app.use('/api', apiRoutes);
 
 // --- START THE SERVER ---
 const PORT = process.env.PORT || 3000;

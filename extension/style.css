@@ -73,3 +73,41 @@
   background-color: #e8e8e8;
   border-color: #aaaaaa;
 }
+
+/*
+ * =======================================================
+ *  AI Debugger "Retry" Button Styles
+ * =======================================================
+ */
+
+.cf-debugger-retry-btn {
+  display: none; /* Hidden by default */
+  position: absolute; /* Crucial for placing it outside the table flow */
+  z-index: 1000; /* Ensure it's on top of other page elements */
+  
+  /* Visual Appearance */
+  background-color: #6a5acd; /* A nice purple (SlateBlue) */
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  
+  /* Smooth transitions for appearing/moving */
+  transition: top 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+.cf-debugger-retry-btn:hover {
+  background-color: #5d4eb4;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+/* ADD THIS NEW RULE */
+.ai-solver-table-wrapper {
+  position: relative; /* This is the key: It creates a positioning context */
+  overflow: visible !important; /* This is the fix: It ensures our button isn't clipped */
+}

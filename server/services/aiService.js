@@ -1,28 +1,22 @@
-// File: server/services/aiService.js (FINAL - Corrected Model Name)
+// File: server/services/aiService.js (FINAL, REFINED FOR REUSABILITY)
 
 const { GoogleGenerativeAI } = require('@google/generative-ai');
-const { buildOptimalPrompt } = require('./promptBuilder');
 const { parseCodeFromResponse } = require('./responseParser');
 
 // Initialize the Google AI Client
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 /**
- * The main service function. It orchestrates the entire process of getting a solution.
- * @param {object} problemData - The scraped data from the extension.
+ * The main service function. It takes a pre-built prompt, sends it to the Gemini API,
+ * and returns the cleaned code solution.
+ * @param {string} prompt - The fully-formed prompt to send to the AI.
  * @returns {Promise<string>} A promise that resolves with the final, clean AI-generated code.
  */
-async function getAiSolution(problemData) {
-  // The entire function is wrapped in a try...catch to handle any unexpected errors,
-  // especially from the API call.
+async function getAiSolution(prompt) {
+  // The entire function is wrapped in a try...catch to handle any unexpected errors.
   try {
-    // 1. Build the optimal prompt.
-    const prompt = buildOptimalPrompt(problemData);
-    console.log("AI_Service: Prompt built successfully.");
-
-    // 2. Call the AI library's function.
-    // --- THIS IS THE ONLY LINE THAT HAS BEEN CHANGED ---
-    const modelName = "gemini-1.5-flash-latest"; // Using a stable, recommended model name.
+    // This function no longer builds the prompt. It receives it as an argument.
+    const modelName = "gemini-1.5-flash-latest";
     
     console.log(`AI_Service: Using Google Gemini model: ${modelName}`);
     console.log("AI_Service: Sending request to Google Gemini...");
@@ -44,7 +38,7 @@ async function getAiSolution(problemData) {
     const rawSolution = response.text();
     console.log("AI_Service: Response received from Google Gemini.");
 
-    // 3. Get the code back by refining and cleaning it.
+    // Get the code back by refining and cleaning it.
     const cleanSolution = parseCodeFromResponse(rawSolution);
     return cleanSolution;
 
@@ -53,7 +47,7 @@ async function getAiSolution(problemData) {
     // or the custom error we threw above for safety blocks.
     console.error("AI_Service: An error occurred within getAiSolution:", error.message);
     
-    // Re-throw the error so the calling function (solveRoutes.js) knows something went wrong.
+    // Re-throw the error so the calling function (the route handler) knows something went wrong.
     throw error;
   }
 }

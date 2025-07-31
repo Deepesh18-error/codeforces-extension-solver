@@ -1,48 +1,80 @@
-// File: server/routes/solveRoutes.js (FINAL, REFINED & CONFIRMED)
+// File: server/routes/solveRoutes.js (FINAL, REFINED & CONFIRMED for Debugging)
 
 const express = require('express');
 const router = express.Router();
 const { getAiSolution } = require('../services/aiService');
+// --- Import the new prompt builder function ---
+const { buildOptimalPrompt, buildDebugPrompt } = require('../services/promptBuilder');
 
-// This route handles all POST requests to /api/solve from the extension.
-router.post('/', async (req, res) => {
+// --- ROUTE 1: /api/solve (for initial problem solving) ---
+router.post('/solve', async (req, res) => {
   console.log('--- Request received at /api/solve ---');
 
-  // 1. Validate the incoming request body to ensure it has the required data.
   const problemData = req.body;
   if (!problemData || !problemData.title || !problemData.statement) {
     console.error('Validation Failed: Request body is missing title or statement.');
-    // If validation fails, send a "400 Bad Request" response and stop.
     return res.status(400).json({ error: 'Invalid request body. Missing title or statement.' });
   }
 
   console.log(`Received request for problem: "${problemData.title}"`);
 
-  // 2. Call the AI service inside a try...catch block.
-  // This is the server's safety net that prevents it from crashing if the AI call fails.
   try {
-    // We await the solution from our resilient aiService.
-    const solutionCode = await getAiSolution(problemData);
+    // 1. Build the initial prompt
+    const prompt = buildOptimalPrompt(problemData);
+    // 2. Get the solution using the generic service
+    const solutionCode = await getAiSolution(prompt);
     
-    // If successful, package the solution into the standard JSON response format.
-    const responsePayload = {
-      solution: solutionCode
-    };
-
-    console.log('--- Successfully generated solution. Sending 200 OK response. ---');
+    const responsePayload = { solution: solutionCode };
+    console.log('--- Successfully generated initial solution. Sending 200 OK response. ---');
     res.status(200).json(responsePayload);
 
   } catch (error) {
-    // This block executes ONLY if getAiSolution throws an error.
-    console.error("--- Error in /api/solve handler. The AI service failed. Sending 500 Internal Server Error. ---");
-    console.error("Error details from AI Service:", error.message);
-
-    // Send a structured error message back to the Chrome extension.
+    console.error("--- Error in /api/solve handler:", error.message);
     res.status(500).json({ 
-      error: "An internal server error occurred on the server while contacting the AI.",
-      details: error.message // This includes the specific reason (e.g., model not found, safety block).
+      error: "An internal server error occurred while contacting the AI.",
+      details: error.message
     });
   }
 });
+
+
+// --- NEW ROUTE 2: /api/debug (for debugging a failed solution) ---
+router.post('/debug', async (req, res) => {
+    console.log('--- Request received at /api/debug ---');
+
+    // 1. Validate the incoming debug context
+    const debugContext = req.body;
+    if (!debugContext || !debugContext.problem || !debugContext.failedAttempt?.code || !debugContext.failedAttempt?.failureDetails) {
+        console.error('Validation Failed: Debug context is missing required fields.');
+        return res.status(400).json({ error: 'Invalid request body. Missing debug context.' });
+    }
+
+    console.log(`Received debug request for problem: "${debugContext.problem.title}"`);
+
+    try {
+        // 2. Build the specialized debug prompt
+        const prompt = buildDebugPrompt(debugContext);
+
+        // --- START OF NEW LOGGING ---
+        console.log("==========================================================");
+        console.log("            SENDING DEBUG PROMPT TO AI                    ");
+        console.log("==========================================================");
+        console.log(prompt);
+        console.log("==========================================================");
+        // --- END OF NEW LOGGING ---
+
+        // 3. Get the solution using the same generic service
+        const solutionCode = await getAiSolution(prompt);
+
+        const responsePayload = { solution: solutionCode };
+        console.log('--- Successfully generated debugged solution. Sending 200 OK response. ---');
+        res.status(200).json(responsePayload);
+
+    } catch (error) {
+        // ... (error handling is the same)
+    }
+});
+
+
 
 module.exports = router;

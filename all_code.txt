@@ -141,9 +141,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         }, 100);
     };
 
-    // ==========================================================
+
     //  LOGIC FOR PROBLEM PAGE
-    // ==========================================================
+
     const scrapeProblemData = () => {
         try {
             const titleEl = document.querySelector(".problem-statement .title") ||
@@ -193,9 +193,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         targetElement.insertAdjacentElement("afterend", btn);
     };
 
-    // ==========================================================
+
     //  CLICK HANDLER FOR SOLVE BUTTON
-    // ==========================================================
+
     const handleSolveButtonClick = () => {
         console.log('[AI SOLVER] Solve button clicked.');
         const data = scrapeProblemData();
@@ -241,9 +241,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         alert('AI Solver: Could not recognize the URL format (not a contest, gym, or problemset page).');
     };
 
-    // ==========================================================
+
     //  LOGIC FOR SUBMIT AND STATUS PAGES
-    // ==========================================================
+
     const initSubmitPageLogic = () => {
         console.log("[AI SOLVER] Submit page detected. Initializing logic for pasting and submission tracking.");
         injectPasterScript();
@@ -289,12 +289,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     // REPLACE your current initStatusPageLogic with this correct version
 
 // REPLACED FUNCTION
-// ==========================================================
 //  START OF THE FINAL CORRECTED FUNCTION
-// ==========================================================
-// ==========================================================
-//  START OF THE FINAL, BULLETPROOF FUNCTION
-// ==========================================================
+
+
 const initStatusPageLogic = () => {
     // Stage 1: Wait for the main content container of the entire page.
     // This ensures the page is ready for us to look for more specific elements.
@@ -333,9 +330,9 @@ const initStatusPageLogic = () => {
         });
     });
 };
-// ==========================================================
+
 //  END OF THE FINAL, BULLETPROOF FUNCTION
-// ==========================================================
+
 
 
     const initVerdictHighlighter = (submissionIdToTrack = null) => {
@@ -408,9 +405,9 @@ const initStatusPageLogic = () => {
 
                 let isUserSubmission = false;
                 
-                // =================================================================
+
                 // <<< FIX #1: This check is now universal for all "My Submissions" pages.
-                // =================================================================
+
                 const onMySubmissionsPage = window.location.href.includes('my=on') || window.location.pathname.endsWith('/my');
 
                 if (onMySubmissionsPage) {
@@ -419,9 +416,9 @@ const initStatusPageLogic = () => {
                 } else {
                     const loggedInUser = getLoggedInUser();
                     
-                    // =================================================================
+
                     // <<< FIX #2: Using the correct selector to find the author's name.
-                    // =================================================================
+
                     const authorElement = trackedRow.querySelector('td.status-party-cell a');
                     
                     const submissionAuthor = authorElement ? authorElement.textContent.trim() : null;
@@ -511,9 +508,9 @@ const initStatusPageLogic = () => {
         button.textContent = 'Copy Input'; // More user-friendly text
         button.title = 'Copy the failing test case input to clipboard';
 
-        // =================================================================
+
         // <<< TASK 1 IMPLEMENTATION: Add click listener to copy data.
-        // =================================================================
+
         button.addEventListener('click', (e) => {
             // Prevent the click from navigating or triggering other events on the row.
             e.preventDefault();
@@ -524,10 +521,10 @@ const initStatusPageLogic = () => {
                 // On success, provide permanent feedback to the user.
                 button.textContent = 'Copied!';
                 
-                // =================================================================
+
                 // <<< TASK 2 IMPLEMENTATION: The setTimeout is removed.
                 // The button text will now stay as "Copied!" permanently.
-                // =================================================================
+
             }).catch(err => {
                 // In case of an error (e.g., browser permissions), log it.
                 console.error('[AI SOLVER] Could not copy text: ', err);
@@ -548,9 +545,9 @@ const initStatusPageLogic = () => {
     }
 };
 
-    // =================================================================
+
     // <<< FIX #3: A more robust selector for finding the table body.
-    // =================================================================
+
     const tableBody = document.querySelector('.datatable tbody');
     if (!tableBody) {
         console.error('[AI SOLVER] Could not find the submission table body. Extension will not run.');
@@ -568,10 +565,8 @@ const initStatusPageLogic = () => {
     console.log('[AI SOLVER] Extension loaded and actively monitoring submissions.');
 };
 
-
-    // ==========================================================
     //  MAIN SCRIPT ROUTER
-    // ==========================================================
+
 // --- AFTER THE FIX ---
 const main = () => {
     const url = window.location.href;
