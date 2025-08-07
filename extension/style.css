@@ -1,13 +1,3 @@
-/* 
- * =======================================================
- *  Codeforces Verdict Highlighter Styles (CORRECTED)
- * =======================================================
- */
-
-/* =================================================================
- *  <<< FIX: All 'td' selectors are now more specific to win CSS conflicts.
- * ================================================================= */
-
 /*
  * Phase 1: The initial "tracking" style.
  */
@@ -29,7 +19,7 @@
   border: 2px solid #009900 !important;
 }
 
-/* CORRECTED SELECTOR for the background color */
+/* the background color */
 .status-frame-datatable tr.cf-highlighter-accepted td {
   background-color: #e8f8e8 !important;
 }
@@ -41,13 +31,13 @@
   border: 2px solid #d10000 !important;
 }
 
-/* CORRECTED SELECTOR for the background color */
+/*  the background color */
 .status-frame-datatable tr.cf-highlighter-rejected td {
   background-color: #fff0f0 !important;
 }
 
 
-/* --- Other styles remain the same, they are not part of the issue --- */
+
 
 .cf-highlighter-status-indicator {
   color: #888888;
@@ -75,9 +65,7 @@
 }
 
 /*
- * =======================================================
  *  AI Debugger "Retry" Button Styles
- * =======================================================
  */
 
 .cf-debugger-retry-btn {
@@ -85,7 +73,7 @@
   position: absolute; /* Crucial for placing it outside the table flow */
   z-index: 1000; /* Ensure it's on top of other page elements */
   
-  /* Visual Appearance */
+
   background-color: #6a5acd; /* A nice purple (SlateBlue) */
   color: white;
   padding: 8px 16px;
@@ -106,7 +94,7 @@
   box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
 
-/* ADD THIS NEW RULE */
+
 .ai-solver-table-wrapper {
   position: relative; /* This is the key: It creates a positioning context */
   overflow: visible !important; /* This is the fix: It ensures our button isn't clipped */

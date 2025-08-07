@@ -15,11 +15,4 @@
 // before running any code. It's a best practice.
 document.addEventListener('DOMContentLoaded', () => {
     console.log("Popup opened and its script is running.");
-
-    // In the future, we would add our event listeners here.
-    // For example:
-    // const settingsButton = document.getElementById('settings-btn');
-    // settingsButton.addEventListener('click', () => {
-    //   chrome.runtime.sendMessage({ type: 'openSettings' });
-    // });
 });

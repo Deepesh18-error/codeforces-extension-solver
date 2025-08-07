@@ -1,22 +1,39 @@
-// File: extension/injector.js
-// This script runs in the page's own context, not the isolated content script world.
-// It has direct access to the page's 'window' object, including the 'ace' editor.
+
+console.log('[INJECTED SCRIPT] Hello from the main page world! Listening for paste event.');
 
 window.addEventListener('pasteSolutionIntoCodeforcesEditor', (event) => {
-    const codeToPaste = event.detail.code;
-    if (!codeToPaste) return;
 
+    console.log("%c--- INJECTED SCRIPT: EVENT RECEIVED ---", "color: #007bff; font-weight: bold;");
+    console.log("[Step 7] 'pasteSolutionIntoCodeforcesEditor' event was caught!");
+
+    if (!event || !event.detail) {
+        console.error("[Step 8] FATAL: Event has no 'detail' object. Payload was likely dropped. Aborting.");
+        console.log("%c------------------------------------------", "color: #007bff;");
+        return;
+    }
+    console.log("[Step 8] Event has a 'detail' object:", event.detail);
+
+    const codeToPaste = event.detail.code;
+
+    if (typeof codeToPaste !== 'string') {
+        console.error("[Step 9] FATAL: event.detail.code is not a string. Aborting.", `Type: ${typeof codeToPaste}`);
+        console.log("%c------------------------------------------", "color: #007bff;");
+        return;
+    }
+    console.log(`[Step 9] event.detail.code is a valid string. Length: ${codeToPaste.length}.`);
+    
+    console.log("[Step 10] Attempting to paste into ACE editor...");
     try {
-        // This is the command that MUST run in the page's context.
         const editor = window.ace.edit('editor');
         if (editor) {
-            editor.setValue(codeToPaste, 1); // 1 moves cursor to end
+            editor.setValue(codeToPaste, 1);
             editor.clearSelection();
-            console.log('[INJECTED SCRIPT] Successfully pasted code via ACE API.');
+            console.log('[Step 11] SUCCESS: Pasted code via ACE API.');
         } else {
-             console.error('[INJECTED SCRIPT] Could not get ACE editor instance.');
+             console.error('[Step 11] FAILED: Could not get ACE editor instance.');
         }
     } catch (e) {
-        console.error('[INJECTED SCRIPT] Error while pasting:', e);
+        console.error('[Step 11] FAILED: Error while calling ACE API:', e);
     }
+    console.log("%c------------------------------------------", "color: #007bff;");
 });

@@ -1,22 +1,17 @@
-
-// File: extension/content_script.js (FINAL, with Robust URL Handling)
 (() => {
     console.log(`[AI SOLVER] Script INJECTED on ${window.location.href}`);
 
-    // ==========================================================
-    //  HELPER FUNCTIONS
-    // ==========================================================
+
 
     const TRACKING_CLASS = 'cf-highlighter-tracking';
     const ACCEPTED_CLASS = 'cf-highlighter-accepted';
     const REJECTED_CLASS = 'cf-highlighter-rejected';
     const ANALYZING_TEXT_SPAN_CLASS = 'cf-highlighter-status-indicator';
     const COPY_BUTTON_CLASS = 'cf-highlighter-copy-btn';
-    // --- (add these with your other constants) ---
     const RETRY_BUTTON_ID = 'ai-debugger-retry-btn';
     const RETRY_BUTTON_CLASS = 'cf-debugger-retry-btn';
     const WRAPPER_CLASS = 'ai-solver-table-wrapper';
-    // ADD this helper function
+    
     function getLoggedInUser() {
         const profileLink = document.querySelector('#header .lang-chooser a[href^="/profile/"]');
         return profileLink ? profileLink.textContent.trim() : null;
@@ -49,37 +44,47 @@
     };
 
 
-    //  LOGIC FOR PROBLEM PAGE
-
     const scrapeProblemData = () => {
-        try {
-            const titleEl = document.querySelector(".problem-statement .title") ||
-                            document.querySelector(".problem-frames-wrapper .title") ||
-                            document.querySelector("div.header > div.title");
+    try {
+        console.log("[AI SOLVER] Starting problem data scrape...");
 
-            const statementEl = document.querySelector(".problem-statement > div:nth-child(2)");
+        const titleEl = document.querySelector(".problem-statement .title") ||
+                        document.querySelector(".problem-frames-wrapper .title") ||
+                        document.querySelector("div.header > div.title");
 
-            if (!titleEl || !statementEl) {
-                console.error("[AI SOLVER] Scraper: Missing title or statement.");
-                return null;
-            }
+        const statementEl = document.querySelector(".problem-statement > div:nth-child(2)");
 
-            const title = titleEl.innerText.replace(/^[A-Z1-9]+\.\s*/, "").trim();
-            const statement = statementEl.innerHTML;
-
-            const samples = Array.from(document.querySelectorAll(".sample-test")).map((test) => {
-                const inEl = test.querySelector(".input pre");
-                const outEl = test.querySelector(".output pre");
-                return inEl && outEl ? { input: inEl.innerText, output: outEl.innerText } : null;
-            }).filter(Boolean);
-
-            return { title, statement, samples };
-        } catch (err) {
-            console.error("[AI SOLVER] Error during scraping:", err);
+        if (!titleEl || !statementEl) {
+            console.error("[AI SOLVER] Scraper CRITICAL FAIL: Missing title or statement element.");
             return null;
         }
-    };
 
+        const title = titleEl.innerText.replace(/^[A-Z1-9]+\.\s*/, "").trim();
+        
+
+        const statement = statementEl.innerText;
+
+        console.log(`[AI SOLVER] Scraped Title: "${title}"`);
+        console.log(`[AI SOLVER] Scraped Statement Length (Text-Only): ${statement.length}`);
+
+
+        const samples = Array.from(document.querySelectorAll(".sample-test")).map((test) => {
+            const inEl = test.querySelector(".input pre");
+            const outEl = test.querySelector(".output pre");
+            if (inEl && outEl) {
+                return { input: inEl.innerText, output: outEl.innerText };
+            }
+            return null;
+        }).filter(Boolean);
+
+        console.log(`[AI SOLVER] Scraped ${samples.length} sample cases.`);
+        
+        return { title, statement, samples };
+    } catch (err) {
+        console.error("[AI SOLVER] An exception occurred during scraping:", err);
+        return null;
+    }
+};
     const injectSolveButton = (targetElement) => {
         if (document.getElementById("ai-solve-button")) return;
 
@@ -101,8 +106,6 @@
     };
 
 
-    //  CLICK HANDLER FOR SOLVE BUTTON
-
     const handleSolveButtonClick = () => {
         console.log('[AI SOLVER] Solve button clicked.');
         const data = scrapeProblemData();
@@ -112,12 +115,10 @@
             return;
         }
 
-        // --- PHASE 2 ACTION: Store the initial problem context for potential debugging. ---
         chrome.storage.local.set({ debugging_context_problem: data });
 
         const url = window.location.href;
 
-        // --- Workflow 1: Contest or Gym Problem ---
         if (url.includes('/contest/') || url.includes('/gym/')) {
             const match = url.match(/\/(contest|gym)\/(\d+)\/problem\/([A-Z]\d*)/);
             if (match) {
@@ -133,7 +134,6 @@
             }
         }
 
-        // --- Workflow 2: Problemset Problem ---
         if (url.includes('/problemset/problem/')) {
             const submitLink = document.querySelector('a[href$="/submit"], a[href^="submit"]');
             if (submitLink) {
@@ -151,8 +151,6 @@
         alert('AI Solver: Could not recognize the URL format (not a contest, gym, or problemset page).');
     };
 
-        // NEW FUNCTION for Phase 1
-// REPLACED FUNCTION - WITH TASK A IMPLEMENTED
 
 const handleRetryClick = (submissionId, failedData) => {
     console.log(`[AI SOLVER] Retry clicked for submission #${submissionId}.`);
@@ -184,14 +182,10 @@ const handleRetryClick = (submissionId, failedData) => {
 
         console.log('[AI SOLVER] SUCCESS: Complete debug package assembled.', debugContextPayload);
         
-        // --- START OF TASK A IMPLEMENTATION ---
         // Send the complete debug package to the background script with the new mission type.
         console.log('[AI SOLVER] Task A: Sending debug mission to background script...');
         chrome.runtime.sendMessage({ type: 'requestDebugSolution', data: debugContextPayload });
-        // --- END OF TASK A IMPLEMENTATION ---
 
-
-        // --- FUTURE LOGIC (Task B: Navigation) WILL GO HERE ---
         alert('TASK A COMPLETE: Debug request sent to background. Navigation (Task B) is next.');
 
         window.history.back(); // for coming back to the status page
@@ -199,43 +193,78 @@ const handleRetryClick = (submissionId, failedData) => {
 };
     //  LOGIC FOR SUBMIT AND STATUS PAGES
 
-    const initSubmitPageLogic = () => {
-        console.log("[AI SOLVER] Submit page detected. Initializing logic for pasting and submission tracking.");
-        injectPasterScript();
 
-        const dispatchPasteEvent = (solution) => {
-            if (!solution || typeof solution !== 'string') return;
-            console.log('[AI SOLVER] Dispatching event with solution to the injected script.');
-            window.dispatchEvent(new CustomEvent('pasteSolutionIntoCodeforcesEditor', {
-                detail: { code: solution }
-            }));
+const initSubmitPageLogic = () => {
+    console.log("[AI SOLVER] Submit page detected. Initializing logic with DEEP LOGGING.");
+    injectPasterScript();
 
-            console.log('[AI SOLVER] Storing pasted code as the last known attempt for debugging.');
-            chrome.storage.local.set({ debugging_context_lastCode: solution });
+    const dispatchPasteEvent = (solution) => {
             
-            chrome.storage.local.remove('solutionToPaste');
+            console.log("%c--- CONTENT SCRIPT: Paste Workflow Analysis ---", "color: #e67e22; font-weight: bold;");
 
-            waitForElement('input[type="submit"][value="Submit"]', (submitButton) => {
+            
+            console.log("[Step A - Input Check] The dispatchPasteEvent function was called.");
+            if (typeof solution === 'string') {
+                console.log(`[Step A] The 'solution' variable is a STRING with length ${solution.length}.`);
+                console.log("[Step A] Data Sample:", solution.substring(0, 150) + "...");
+            } else {
+                console.error(`[Step A] FATAL ERROR: The 'solution' variable is NOT a string. Type: ${typeof solution}. Aborting paste.`);
+                console.log("%c-------------------------------------------------", "color: #e67e22;");
+                return; // Abort if it's not a string
+            }
+
+            
+            if (!solution) { 
+                console.warn("[Step B - Guard Clause Check] Your original check `!solution` is TRUE. This is likely because the solution is an empty string ''. The function will now abort as per your original code.");
+                 console.log("%c-------------------------------------------------", "color: #e67e22;");
+                return;
+            } else {
+                 console.log("[Step B - Guard Clause Check] Your original check `!solution` is FALSE. The solution is a non-empty string. Proceeding.");
+            }
+            
+            // the "bridge"
+            console.log("[Step C - Bridge Crossing] Attempting to dispatch the CustomEvent to the main page world (for injector.js to catch)...");
+            try {
+                window.dispatchEvent(new CustomEvent('pasteSolutionIntoCodeforcesEditor', {
+                    detail: { code: solution }
+                }));
+                console.log("[Step C] SUCCESS: The CustomEvent was dispatched from the content script without error.");
+            } catch (e) {
+                console.error("[Step C] FATAL ERROR: Failed to dispatch the CustomEvent. This is a critical failure in the bridge.", e);
+                console.log("%c-------------------------------------------------", "color: #e67e22;");
+                return;
+            }
+
+
+        
+        console.log('[AI SOLVER] Storing pasted code as the last known attempt for debugging.');
+        chrome.storage.local.set({ debugging_context_lastCode: solution });
+        chrome.storage.local.remove('solutionToPaste');
+        waitForElement('input[type="submit"][value="Submit"]', (submitButton) => {
             console.log('[AI SOLVER] Found submit button. Submitting automatically...');
             submitButton.click();
-            }, 5000);
-        };
+        }, 5000);
+    };
 
-        chrome.storage.local.get('solutionToPaste', (result) => {
-            if (result && result.solutionToPaste) {
-                dispatchPasteEvent(result.solutionToPaste);
-            }
-        });
+    // Add logging to the retrieval logic
+    chrome.storage.local.get('solutionToPaste', (result) => {
+        console.log("[AI SOLVER] Initial check of chrome.storage on page load.");
+        if (result && typeof result.solutionToPaste === 'string') {
+            console.log("Found solution in storage immediately. Calling dispatchPasteEvent.");
+            dispatchPasteEvent(result.solutionToPaste);
+        } else {
+            console.log("No solution found in storage on initial check. Waiting for listener.");
+        }
+    });
 
-        const storageListener = (changes, namespace) => {
-            if (namespace === 'local' && changes.solutionToPaste) {
-                console.log("[AI SOLVER] Listener detected a solution has arrived.");
-                dispatchPasteEvent(changes.solutionToPaste.newValue);
-                chrome.storage.onChanged.removeListener(storageListener);
-            }
-        };
-
-        chrome.storage.onChanged.addListener(storageListener);
+    const storageListener = (changes, namespace) => {
+        if (namespace === 'local' && changes.solutionToPaste) {
+            console.log("[AI SOLVER] Storage listener fired! A new solution has arrived.");
+            dispatchPasteEvent(changes.solutionToPaste.newValue);
+            chrome.storage.onChanged.removeListener(storageListener);
+        }
+    };
+    chrome.storage.onChanged.addListener(storageListener);
 
         console.log("[AI SOLVER] Setting up submission tracker.");
         waitForElement('input[type="submit"][value="Submit"]', (submitButton) => {
@@ -250,14 +279,7 @@ const handleRetryClick = (submissionId, failedData) => {
         });
     };
 
-    // REPLACE your current initStatusPageLogic with this correct version
-
-// REPLACED FUNCTION
-//  START OF THE FINAL CORRECTED FUNCTION
-
-
-// REPLACED FUNCTION
-// REPLACED FUNCTION
+   
 const initStatusPageLogic = () => {
     console.log('[AI SOLVER] Status page detected. Waiting for main page content to load...');
     
@@ -267,7 +289,7 @@ const initStatusPageLogic = () => {
         waitForElement('.status-frame-datatable', (tableElement) => {
             console.log('[AI SOLVER] SUCCESS: Submission table found! Initializing core logic.');
 
-            // --- START OF NEW WRAPPER LOGIC ---
+            
             let wrapper = tableElement.closest(`.${WRAPPER_CLASS}`);
             if (!wrapper) {
                 console.log('[AI SOLVER] Wrapping submission table to create positioning context.');
@@ -285,7 +307,7 @@ const initStatusPageLogic = () => {
                 wrapper.appendChild(retryButton); // Append to the new wrapper
                 console.log('[AI SOLVER] Global "Retry" button created and appended to wrapper.');
             }
-            // --- END OF NEW WRAPPER LOGIC ---
+            
 
             const startMonitoringById = (submissionId) => {
                 console.log(`[AI SOLVER] Now monitoring AI submission ID #${submissionId}`);
@@ -294,7 +316,7 @@ const initStatusPageLogic = () => {
 
             chrome.storage.local.get(['isAwaitingVerdict'], (result) => {
                 if (result && result.isAwaitingVerdict) {
-                    // ... (rest of the function is the same)
+                   
                     console.log('[AI SOLVER] "isAwaitingVerdict" flag is true.');
                     chrome.storage.local.remove('isAwaitingVerdict');
 
@@ -314,9 +336,6 @@ const initStatusPageLogic = () => {
     });
 };
 
-//  END OF THE FINAL, BULLETPROOF FUNCTION
-
-
 
     const initVerdictHighlighter = (submissionIdToTrack = null) => {
     // If we passed a specific ID, we use it. Otherwise, targetSubmissionID is null and the old logic runs.
@@ -334,7 +353,7 @@ const initStatusPageLogic = () => {
 
     let mutationTimeout = null;
 
-    // ... onMutation and handleVerdictCheck remain the same ...
+    
     const onMutation = () => {
         clearTimeout(mutationTimeout);
         mutationTimeout = setTimeout(handleVerdictCheck, 100);
@@ -346,7 +365,7 @@ const initStatusPageLogic = () => {
     };
     
   const checkForNewSubmission = () => {
-    const topRow = document.querySelector('.datatable tbody tr[data-submission-id]'); // CHANGED: More robust selector
+    const topRow = document.querySelector('.datatable tbody tr[data-submission-id]'); 
     if (!topRow) return;
     const submissionId = topRow.getAttribute('data-submission-id');
     const verdictCell = topRow.querySelector('.status-verdict-cell');
@@ -355,16 +374,14 @@ const initStatusPageLogic = () => {
     const isLive = verdictText.includes('In queue') || verdictText.includes('Running');
     if (isLive) {
       targetSubmissionID = submissionId;
-      topRow.classList.add(TRACKING_CLASS); // Use the new black border style
+      topRow.classList.add(TRACKING_CLASS); //  new black border style
       console.log(`[CF Highlighter] Phase 1: New submission detected. Now watching ID: ${targetSubmissionID}`);
     }
   };
     
-    // REPLACED FUNCTION
 const resetState = () => { 
     targetSubmissionID = null; 
     
-    // --- ADD THIS LINE ---
     const retryButton = document.getElementById(RETRY_BUTTON_ID);
     if (retryButton) {
         retryButton.style.display = 'none';
@@ -398,8 +415,6 @@ const resetState = () => {
                 let isUserSubmission = false;
                 
 
-                // <<< FIX #1: This check is now universal for all "My Submissions" pages.
-
                 const onMySubmissionsPage = window.location.href.includes('my=on') || window.location.pathname.endsWith('/my');
 
                 if (onMySubmissionsPage) {
@@ -407,9 +422,6 @@ const resetState = () => {
                     isUserSubmission = true;
                 } else {
                     const loggedInUser = getLoggedInUser();
-                    
-
-                    // <<< FIX #2: Using the correct selector to find the author's name.
 
                     const authorElement = trackedRow.querySelector('td.status-party-cell a');
                     
@@ -421,7 +433,6 @@ const resetState = () => {
                     }
                 }
 
-                // Now, we check the final boolean result.
                 if (isUserSubmission) {
                     console.log(`[AI SOLVER] User ownership confirmed. Proceeding to scrape.`);
                     const isActionable = verdictText.toLowerCase().includes('wrong answer') || verdictText.toLowerCase().includes('time limit exceeded');
@@ -467,22 +478,36 @@ const resetState = () => {
     };
     
     const startPhase3_ExtractFromJson = (json, failedTestNumber) => {
-        const inputKey = `input#${failedTestNumber}`;
-        const outputKey = `output#${failedTestNumber}`;
-        const answerKey = `answer#${failedTestNumber}`;
-        const checkerLogKey = `checkerStdoutAndStderr#${failedTestNumber}`;
-        return {
-            input: json[inputKey]?.trim() ?? '[Not Available]',
-            output: json[outputKey]?.trim() ?? '[Not Available]',
-            answer: json[answerKey]?.trim() ?? '[Not Available]',
-            checkerLog: json[checkerLogKey]?.trim() ?? '[Not Available]',
-        };
-    };
-    
-    // REPLACED FUNCTION
-// REPLACED FUNCTION - WITH CORRECTED POSITIONING LOGIC
 
-// REPLACED FUNCTION - FINAL, CORRECTED VERSION
+    // Strategy 1: Check for batch keys first (handles contest-style "Wrong answer" verdicts).
+    // These keys directly correspond to what we saw in the debug screenshot.
+    if (json.input && json.answer && json.checkerLog) {
+        console.log("[AI SOLVER] Scraper: Detected batch test case format.");
+        return {
+            input: json.input?.trim() ?? '[Not Available]',
+            output: json.output?.trim() ?? '[Not Available]',
+            answer: json.answer?.trim() ?? '[Not Available]',
+            checkerLog: json.checkerLog?.trim() ?? '[Not Available]',
+            testNumber: failedTestNumber // Pass the test number for the prompt
+        };
+    }
+
+    // Strategy 2: Fallback to the original single test case format (for other verdicts like TLE).
+    console.log("[AI SOLVER] Scraper: No batch keys found, falling back to single test case format.");
+    const inputKey = `input#${failedTestNumber}`;
+    const outputKey = `output#${failedTestNumber}`;
+    const answerKey = `answer#${failedTestNumber}`;
+    const checkerLogKey = `checkerStdoutAndStderr#${failedTestNumber}`;
+    
+    return {
+        input: json[inputKey]?.trim() ?? '[Not Available]',
+        output: json[outputKey]?.trim() ?? '[Not Available]',
+        answer: json[answerKey]?.trim() ?? '[Not Available]',
+        checkerLog: json[checkerLogKey]?.trim() ?? '[Not Available]',
+        testNumber: failedTestNumber
+    };
+};
+    
 const startPhase4_FinalUIUpdate = (submissionId, result) => {
     const row = document.querySelector(`tr[data-submission-id="${submissionId}"]`);
     if (!row) return;
@@ -496,7 +521,7 @@ const startPhase4_FinalUIUpdate = (submissionId, result) => {
     if (result.success) {
         console.table(result.data); // This is the scraped data we need to pass
 
-        // "Copy Input" button logic (no changes here)...
+        // "Copy Input" button logic 
         const copyButton = document.createElement('button');
         copyButton.className = COPY_BUTTON_CLASS;
         copyButton.textContent = 'Copy Input';
@@ -516,7 +541,7 @@ const startPhase4_FinalUIUpdate = (submissionId, result) => {
         const wrapper = row.closest(`.${WRAPPER_CLASS}`);
 
         if (retryButton && wrapper) {
-            // Positioning logic (no changes here)...
+            // Positioning logic 
             retryButton.style.visibility = 'hidden';
             retryButton.style.display = 'block';
             const buttonWidth = retryButton.offsetWidth;
@@ -530,7 +555,6 @@ const startPhase4_FinalUIUpdate = (submissionId, result) => {
             retryButton.style.left = `${leftPosition}px`;
             retryButton.style.visibility = 'visible';
             
-            // --- THE KEY CHANGE IS HERE ---
             // We pass the scraped data (result.data) directly to the click handler.
             retryButton.onclick = () => handleRetryClick(submissionId, result.data);
         }
@@ -542,9 +566,6 @@ const startPhase4_FinalUIUpdate = (submissionId, result) => {
         verdictCell.appendChild(errorSpan);
     }
 };
-
-
-    // <<< FIX #3: A more robust selector for finding the table body.
 
     const tableBody = document.querySelector('.datatable tbody');
     if (!tableBody) {
@@ -564,8 +585,6 @@ const startPhase4_FinalUIUpdate = (submissionId, result) => {
 };
 
     //  MAIN SCRIPT ROUTER
-
-// --- AFTER THE FIX ---
 const main = () => {
     const url = window.location.href;
 
@@ -573,7 +592,6 @@ const main = () => {
         initSubmitPageLogic();
     } else if (url.includes('/status') || url.includes('/my')) {
         // Only call initStatusPageLogic. It is now the single point of entry
-        // for all status page functionality.
         initStatusPageLogic(); 
     } else if (document.querySelector('.problem-statement')) {
         waitForElement(

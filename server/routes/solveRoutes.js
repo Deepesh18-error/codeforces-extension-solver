@@ -1,10 +1,8 @@
-// File: server/routes/solveRoutes.js (FINAL, REFINED & CONFIRMED for Debugging)
-
 const express = require('express');
 const router = express.Router();
 const { getAiSolution } = require('../services/aiService');
-// --- Import the new prompt builder function ---
 const { buildOptimalPrompt, buildDebugPrompt } = require('../services/promptBuilder');
+const { performance } = require('perf_hooks'); // Import the performance module
 
 // --- ROUTE 1: /api/solve (for initial problem solving) ---
 router.post('/solve', async (req, res) => {
@@ -19,10 +17,16 @@ router.post('/solve', async (req, res) => {
   console.log(`Received request for problem: "${problemData.title}"`);
 
   try {
-    // 1. Build the initial prompt
     const prompt = buildOptimalPrompt(problemData);
-    // 2. Get the solution using the generic service
+    
+    // --- START TIMER ---
+    const startTime = performance.now();
+
     const solutionCode = await getAiSolution(prompt);
+
+    const endTime = performance.now();
+    const durationInSeconds = ((endTime - startTime) / 1000).toFixed(2);
+    console.log(`AI Latency: Model took ${durationInSeconds} seconds to respond.`);
     
     const responsePayload = { solution: solutionCode };
     console.log('--- Successfully generated initial solution. Sending 200 OK response. ---');
@@ -38,13 +42,12 @@ router.post('/solve', async (req, res) => {
 });
 
 
-// --- NEW ROUTE 2: /api/debug (for debugging a failed solution) ---
+// --- ROUTE 2: /api/debug (for debugging a failed solution) ---
 router.post('/debug', async (req, res) => {
     console.log('--- Request received at /api/debug ---');
 
-    // 1. Validate the incoming debug context
     const debugContext = req.body;
-    if (!debugContext || !debugContext.problem || !debugContext.failedAttempt?.code || !debugContext.failedAttempt?.failureDetails) {
+    if (!debugContext || !debugContext.problem || !debugContext.failedAttempt?.code) {
         console.error('Validation Failed: Debug context is missing required fields.');
         return res.status(400).json({ error: 'Invalid request body. Missing debug context.' });
     }
@@ -52,29 +55,37 @@ router.post('/debug', async (req, res) => {
     console.log(`Received debug request for problem: "${debugContext.problem.title}"`);
 
     try {
-        // 2. Build the specialized debug prompt
         const prompt = buildDebugPrompt(debugContext);
 
-        // --- START OF NEW LOGGING ---
         console.log("==========================================================");
         console.log("            SENDING DEBUG PROMPT TO AI                    ");
         console.log("==========================================================");
         console.log(prompt);
         console.log("==========================================================");
-        // --- END OF NEW LOGGING ---
 
-        // 3. Get the solution using the same generic service
+        // --- START TIMER ---
+        const startTime = performance.now();
+
         const solutionCode = await getAiSolution(prompt);
+
+        const endTime = performance.now();
+        const durationInSeconds = ((endTime - startTime) / 1000).toFixed(2);
+        console.log(`AI Latency: Model took ${durationInSeconds} seconds to respond.`);
 
         const responsePayload = { solution: solutionCode };
         console.log('--- Successfully generated debugged solution. Sending 200 OK response. ---');
         res.status(200).json(responsePayload);
 
     } catch (error) {
-        // ... (error handling is the same)
+        console.error("--- FATAL ERROR in /api/debug handler ---");
+        console.error("This likely means the data sent from the extension was malformed.");
+        console.error("Error Message:", error.message);
+        console.error("Error Stack:", error.stack);
+        res.status(500).json({ 
+            error: "An internal server error occurred while building the debug prompt.",
+            details: error.message
+        });
     }
 });
-
-
 
 module.exports = router;

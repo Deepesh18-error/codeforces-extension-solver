@@ -1,11 +1,10 @@
-// File: extension/background.js (DEFINITIVE, FULLY CORRECTED VERSION)
-
 console.log("--- Background Script (HQ) is online. ---");
 
 /**
  * Fetches the INITIAL AI solution from the backend server.
  * @param {object} problemData - The problem data scraped from the page.
  */
+
 async function getSolutionAndStoreIt(problemData) {
   const serverUrl = 'http://localhost:3000/api/solve';
   console.log(`HQ: Contacting server at ${serverUrl} to solve "${problemData.title}"...`);
@@ -21,29 +20,38 @@ async function getSolutionAndStoreIt(problemData) {
     }
 
     const data = await response.json();
-
-    if (data.solution) {
-      console.log("HQ: Initial solution received. Storing for pasting and for debug context.");
-      // For the first solution, we set BOTH storage keys. This was the critical fix.
-      chrome.storage.local.set({ 
-          solutionToPaste: data.solution,
-          debugging_context_lastCode: data.solution 
-      });
+console.log("%c--- BACKGROUND SCRIPT: DATA RECEIVED (Solve) ---", "color: #ff8c00; font-weight: bold;");
+    console.log("Received payload from server. Checking 'solution' property.");
+    if (data && typeof data.solution === 'string') {
+        console.log(`'data.solution' is a STRING. Length: ${data.solution.length}.`);
+        console.log("Attempting to write to chrome.storage...");
+        chrome.storage.local.set({ 
+            solutionToPaste: data.solution,
+            debugging_context_lastCode: data.solution 
+        }, () => {
+            console.log("SUCCESS: Data has been written to chrome.storage.");
+        });
     } else {
-      throw new Error("Server response did not contain a 'solution' key.");
+        console.error("'data.solution' is MISSING or NOT a string. Aborting storage write.");
+        console.log(`Type: ${typeof data.solution}, Value:`, data.solution);
+        throw new Error("Server response did not contain a valid 'solution' string.");
     }
+    console.log("%c----------------------------------------------------", "color: #ff8c00;");
+
   } catch (error) {
     console.error('HQ: Fetch to backend for initial solve failed:', error);
     chrome.storage.local.set({ solutionToPaste: `// Error: Failed to get solution.\n// Reason: ${error.message}` });
   }
 }
 
+
 /**
  * Fetches a DEBUGGED AI solution from the backend and stores it for pasting.
  * @param {object} debugContext - The full context including problem, failed code, and failure details.
  */
+
 async function getDebuggedSolution(debugContext) {
-  const serverUrl = 'http://localhost:3000/api/debug'; // The new endpoint
+  const serverUrl = 'http://localhost:3000/api/debug'; 
   console.log(`HQ: Contacting server at ${serverUrl} to debug the problem...`);
   try {
     const response = await fetch(serverUrl, {
@@ -58,28 +66,34 @@ async function getDebuggedSolution(debugContext) {
 
     const data = await response.json();
 
-    if (data.solution) {
-      console.log("HQ: Debugged solution received. Storing for pasting and updating debug context.");
-      // For a debugged solution, we update BOTH keys again.
-      chrome.storage.local.set({ 
-          solutionToPaste: data.solution,
-          debugging_context_lastCode: data.solution 
-      });
+console.log("%c--- BACKGROUND SCRIPT: DATA RECEIVED (Debug) ---", "color: #ff8c00; font-weight: bold;");
+    console.log("Received payload from server. Checking 'solution' property.");
+    if (data && typeof data.solution === 'string') {
+        console.log(`'data.solution' is a STRING. Length: ${data.solution.length}.`);
+        console.log("Attempting to write to chrome.storage...");
+        chrome.storage.local.set({ 
+            solutionToPaste: data.solution,
+            debugging_context_lastCode: data.solution 
+        }, () => {
+            console.log("SUCCESS: Data has been written to chrome.storage.");
+        });
     } else {
-      throw new Error("Server response did not contain a 'solution' key.");
+        console.error("'data.solution' is MISSING or NOT a string. Aborting storage write.");
+        console.log(`Type: ${typeof data.solution}, Value:`, data.solution);
+        throw new Error("Server response did not contain a valid 'solution' string.");
     }
+    console.log("%c----------------------------------------------------", "color: #ff8c00;");
+
   } catch (error) {
     console.error('HQ: Fetch to backend for debug failed:', error);
     chrome.storage.local.set({ solutionToPaste: `// Error: Failed to get debugged solution.\n// Reason: ${error.message}` });
   }
 }
 
-// ==========================================================
-//  Main Message Listener (UPDATED to handle all message types)
-// ==========================================================
+
 chrome.runtime.onMessage.addListener((message, sender) => {
     
-    // Handler for the original "Solve" request
+  
     if (message.type === 'getSolutionAndPrepareToPaste') {
         
         console.log("HQ: Received 'Solve' mission. Will fetch solution in the background.");
@@ -91,13 +105,13 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         } else {
             console.log("HQ: No submitUrl provided. Navigation handled by content script.");
         }
-        return; // Good practice to return after handling a message
+        return; 
     }
 
-    // Handler for the new "Debug" request
+
     if (message.type === 'requestDebugSolution') {
         console.log("HQ: Received 'Debug' mission. Will contact server with failure context.");
         getDebuggedSolution(message.data);
-        return; // Good practice to return after handling a message
+        return; 
     }
 });

@@ -1,5 +1,3 @@
-// File: server/services/aiService.js (FINAL, REFINED FOR REUSABILITY)
-
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { parseCodeFromResponse } = require('./responseParser');
 
@@ -12,11 +10,13 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
  * @param {string} prompt - The fully-formed prompt to send to the AI.
  * @returns {Promise<string>} A promise that resolves with the final, clean AI-generated code.
  */
+
 async function getAiSolution(prompt) {
-  // The entire function is wrapped in a try...catch to handle any unexpected errors.
   try {
-    // This function no longer builds the prompt. It receives it as an argument.
-    const modelName = "gemini-1.5-flash-latest";
+      
+    // gemini-1.5-flash-latest , gemini-2.5-flash-preview-05-20
+
+    const modelName = "gemini-2.5-flash-preview-05-20";
     
     console.log(`AI_Service: Using Google Gemini model: ${modelName}`);
     console.log("AI_Service: Sending request to Google Gemini...");
@@ -25,31 +25,46 @@ async function getAiSolution(prompt) {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     
-    // This critical check handles cases where Gemini blocks the response for safety.
     if (!response || !response.text()) {
         const finishReason = response?.promptFeedback?.blockReason || 'No content';
         const safetyRatings = response?.candidates?.[0]?.safetyRatings || 'N/A';
         console.error(`AI_Service: Gemini response was empty or blocked. Reason: ${finishReason}`);
         console.error(`AI_Service: Safety Ratings: ${JSON.stringify(safetyRatings)}`);
-        // We throw a specific error that the route handler can catch.
         throw new Error(`The AI service returned an empty or blocked response. Reason: ${finishReason}`);
     }
     
     const rawSolution = response.text();
-    console.log("AI_Service: Response received from Google Gemini.");
+    
+    
+    console.log("==========================================================");
+    console.log("            RAW RESPONSE FROM GEMINI API                  ");
+    console.log("==========================================================");
+    console.log(rawSolution);
+    console.log("==========================================================");
+  
 
-    // Get the code back by refining and cleaning it.
     const cleanSolution = parseCodeFromResponse(rawSolution);
+
+    console.log("==========================================================");
+    console.log("            PARSED SOLUTION (after cleaning)              ");
+    console.log("==========================================================");
+    console.log(`--- Start of Parsed Code (Length: ${cleanSolution.length}) ---`);
+    console.log(cleanSolution);
+    console.log("--- End of Parsed Code ---");
+    if (cleanSolution.length === 0) {
+        console.warn("\nAI_Service: WARNING - The parsed solution is an EMPTY STRING. This is likely causing the empty editor issue.\n");
+    }
+    console.log("==========================================================");
+  
+
     return cleanSolution;
 
   } catch (error) {
-    // This block catches errors from the API call (e.g., network issues, invalid API key)
-    // or the custom error we threw above for safety blocks.
     console.error("AI_Service: An error occurred within getAiSolution:", error.message);
-    
-    // Re-throw the error so the calling function (the route handler) knows something went wrong.
     throw error;
   }
 }
 
 module.exports = { getAiSolution };
+
+

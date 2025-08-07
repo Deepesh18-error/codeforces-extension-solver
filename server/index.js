@@ -1,12 +1,10 @@
-// File: server/index.js (FINAL, CORRECTED VERSION)
-
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const corsOptions = require('./config/corsOptions');
 
 // Import our router
-const apiRoutes = require('./routes/solveRoutes'); // Rename for clarity
+const apiRoutes = require('./routes/solveRoutes'); 
 
 const app = express();
 

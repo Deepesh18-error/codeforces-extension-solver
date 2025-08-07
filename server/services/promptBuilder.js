@@ -1,5 +1,3 @@
-// File: server/services/promptBuilder.js
-
 /**
  * Builds a high-quality, optimal prompt to send to the Gemini model,
  * incorporating role-playing, constraints, the problem statement, and formatting rules.
@@ -32,7 +30,6 @@ Sample Output ${index + 1}:
 ${sample.output}`).join('\n')}
 `;
 
-  // Combine all parts into the final prompt.
   const finalPrompt = `
 ${rolePlaying}
 
@@ -46,17 +43,30 @@ ${problemContext}
   return finalPrompt.trim();
 }
 
-// CORRECTED FUNCTION
-// REPLACED FUNCTION in promptBuilder.js
 
 function buildDebugPrompt(debugContext) {
   const { problem, failedAttempt } = debugContext;
   const { code, failureDetails } = failedAttempt;
 
-  const rolePlaying = "You are an expert C++ competitive programmer and a master debugger. Your primary skill is finding subtle bugs in code and fixing them.";
+  const rolePlaying = "You are a world-class competitive programmer and an expert debugger. You methodically analyze failures to devise robust, correct solutions.";
 
-  // --- IMPROVED INSTRUCTIONS ---
-  const taskAndConstraints = "CRITICAL MISSION: Your previous C++ solution, provided below, FAILED on a hidden test case. I have provided you with the exact test case data. Your task is to meticulously analyze WHY your code failed and provide a CORRECTED, different solution. DO NOT provide the same code again. You must identify the logical error and fix it. Your response MUST contain ONLY the corrected C++ code, and nothing else.";
+
+  const taskAndConstraints = `
+--- YOUR MISSION ---
+
+Your previous solution was based on a flawed premise:
+
+This entire line of reasoning has been proven incorrect. Your task is to act as an expert debugger and follow these steps precisely:
+
+1.  **ANALYZE THE FAILURE:** Your primary task is to deeply analyze the provided "Debugging Data". Understand *exactly* why the previous code failed on that specific input by comparing your incorrect output to the expected answer.
+
+2.  **ABANDON THE FAILED LOGIC:** Based on your analysis, you must completely **abandon the flawed logic** of the previous attempt. Do not try to patch it or make small changes. It is fundamentally wrong.
+
+3.  **DESIGN A NEW ALGORITHM:** Formulate a **fundamentally new and correct algorithm** that properly handles the problem's constraints and the specific edge case revealed by the failed test.
+
+4.  **IMPLEMENT THE SOLUTION:** Write the complete, runnable C++ code for your new solution. Your entire response must be **ONLY the C++ code** inside a markdown block. Do not include any explanations, apologies, or conversational text.
+`;
+
   
   let checkerLogContext = '';
   if (failureDetails.checkerLog && failureDetails.checkerLog.trim() && failureDetails.checkerLog !== '[Not Available]') {
@@ -67,35 +77,41 @@ ${failureDetails.checkerLog}
   }
 
   const context = `
---- ORIGINAL PROBLEM STATEMENT ---
+--- ORIGINAL PROBLEM DEFINITION ---
 Title: ${problem.title}
 ${problem.statement}
 
---- YOUR PREVIOUS FAILED CODE (THIS CODE IS WRONG) ---
+--- FAILED EXPERIMENT (The Previous Incorrect Code) ---
+The following code is based on a flawed premise and should NOT be reused.
 \`\`\`cpp
 ${code}
 \`\`\`
 
---- FAILED TEST CASE ANALYSIS (Your code failed with this data) ---
-Input:
+--- DEBUGGING DATA (Your Primary Focus) ---
+This data reveals the flaw in the previous attempt.
+
+${checkerLogContext}
+
+[BATCH INPUT THAT CAUSED FAILURE]
 ${failureDetails.input}
 
-Your Code's Incorrect Output:
+[YOUR PROGRAM's INCORRECT BATCH OUTPUT]
 ${failureDetails.output}
 
-Expected Correct Answer:
+[THE JUDGE's CORRECT BATCH ANSWER]
 ${failureDetails.answer}
-${checkerLogContext}
---- YOUR NEW, CORRECTED, AND COMPLETE C++ SOLUTION ---
+
+--- YOUR NEW, CORRECT C++ SOLUTION (Based on a New Algorithm) ---
 `;
 
+  // 5. Assemble the final prompt.
   return `
 ${rolePlaying}
 
 ${taskAndConstraints}
+
 ${context}
   `.trim();
 }
 
-// UPDATE module.exports
 module.exports = { buildOptimalPrompt, buildDebugPrompt };

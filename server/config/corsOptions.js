@@ -1,4 +1,3 @@
-// A more robust and clear CORS configuration
 const corsOptions = {
   origin: (origin, callback) => {
     // Allow requests with no origin (like Postman, server-to-server)
