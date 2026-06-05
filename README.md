@@ -1,4 +1,12 @@
-# Codeforces Extension Solver
+# 🚀 Codeforces Extension Solver
+
+![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white)
+![Node.js](https://img.shields.io/badge/Node.js-Backend-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
+![Express](https://img.shields.io/badge/Express-API-000000?style=for-the-badge&logo=express&logoColor=white)
+![Gemini](https://img.shields.io/badge/Gemini-Powered-8E75B8?style=for-the-badge&logo=googlegemini&logoColor=white)
+![Codeforces](https://img.shields.io/badge/Codeforces-Workflow-1F8ACB?style=for-the-badge)
+
+> A local-first Chrome extension that brings assisted solving, automated submission, and retry debugging directly into the Codeforces workflow.
 
 Codeforces Extension Solver is a Chrome extension plus local Node.js backend that adds assisted problem solving directly to Codeforces problem pages.
 
@@ -8,28 +16,28 @@ The project also includes a retry/debug workflow for failed submissions. When Co
 
 ---
 
-## Highlights
+## ✨ Highlights
 
-- **Problem detection**
+- 🧭 **Problem detection**
   - Supports problemset pages, contest pages, and gym pages.
   - Injects controls only on relevant Codeforces pages.
 
-- **Problem context extraction**
+- 📄 **Problem context extraction**
   - Reads the problem title, statement, and sample tests from the page DOM.
   - Sends the extracted payload to the local backend.
 
-- **Local backend for model access**
+- 🔐 **Local backend for model access**
   - Keeps the Gemini API key out of the browser extension.
   - Uses Express routes for solve and debug requests.
   - Uses `@google/genai` to call Gemini models.
 
-- **Automated submit workflow**
+- ⚙️ **Automated submit workflow**
   - Navigates to the correct Codeforces submit page.
   - Handles contest/gym problem indexes.
   - Handles the newer problemset submit page that requires a manually filled problem code such as `2232B`.
   - Pastes code into the Codeforces Ace editor through a page-context bridge script.
 
-- **Verdict tracking and retry**
+- 🧪 **Verdict tracking and retry**
   - Watches live Codeforces status updates without relying on URL changes.
   - Highlights tracked submissions while they are running.
   - Marks accepted/rejected final verdicts visually.
@@ -37,7 +45,7 @@ The project also includes a retry/debug workflow for failed submissions. When Co
 
 ---
 
-## Project Structure
+## 🗂️ Project Structure
 
 ```text
 codeforces-extension-solver/
@@ -69,9 +77,9 @@ codeforces-extension-solver/
 
 ---
 
-## Extension Files
+## 🧩 Extension Files
 
-### `extension/manifest.json`
+### 📦 `extension/manifest.json`
 
 Defines the Chrome extension configuration:
 
@@ -87,7 +95,7 @@ Defines the Chrome extension configuration:
   - Codeforces pages.
   - `http://localhost:3000/` for local backend requests.
 
-### `extension/content_script.js`
+### 🧠 `extension/content_script.js`
 
 This is the main browser-side controller. It runs on Codeforces pages and decides what workflow should start based on the current URL.
 
@@ -103,7 +111,7 @@ Responsibilities:
 - Watch Codeforces status tables for live verdict changes.
 - Scrape failed-test information for retry/debug requests.
 
-### `extension/background.js`
+### 🔄 `extension/background.js`
 
 The background service worker connects the content script to the backend.
 
@@ -115,7 +123,7 @@ Responsibilities:
 - Store generation errors separately so they are shown to the user instead of being pasted into the editor.
 - Navigate contest/gym pages to the provided submit URL when needed.
 
-### `extension/injector.js`
+### 📝 `extension/injector.js`
 
 Codeforces uses an Ace editor for source input. A normal content script runs in Chrome's isolated world, so it cannot safely access the page's `window.ace` object directly.
 
@@ -133,7 +141,7 @@ window.ace.edit('editor').setValue(code, 1)
 
 This is the bridge that makes automatic code insertion work.
 
-### `extension/style.css`
+### 🎨 `extension/style.css`
 
 Adds visual states for the submission table:
 
@@ -143,15 +151,15 @@ Adds visual states for the submission table:
 - retry button placement
 - copy-input button styling
 
-### Popup Files
+### 🪟 Popup Files
 
 `popup.html`, `popup.css`, and `popup.js` define the small toolbar popup. It is currently informational and can be extended later for settings such as model choice, language preference, or auto-submit toggles.
 
 ---
 
-## Backend Files
+## 🖥️ Backend Files
 
-### `server/index.js`
+### 🚦 `server/index.js`
 
 Starts the Express server.
 
@@ -163,11 +171,11 @@ Key behavior:
 - Serves a health-check route at `/`.
 - Mounts API routes at `/api`.
 
-### `server/routes/solveRoutes.js`
+### 🛣️ `server/routes/solveRoutes.js`
 
 Defines the API endpoints used by the extension.
 
-#### `POST /api/solve`
+#### ⚡ `POST /api/solve`
 
 Receives initial problem data:
 
@@ -192,13 +200,13 @@ Returns:
 }
 ```
 
-#### `POST /api/debug`
+#### 🛠️ `POST /api/debug`
 
 Receives the original problem, previous source code, and failed-test details.
 
 Returns a corrected C++ solution.
 
-### `server/services/promptBuilder.js`
+### 🧾 `server/services/promptBuilder.js`
 
 Builds prompts for:
 
@@ -207,7 +215,7 @@ Builds prompts for:
 
 The initial prompt asks for a complete runnable C++ program. The debug prompt includes the previous failed code and the exact failed-test data when available.
 
-### `server/services/aiService.js`
+### 🤖 `server/services/aiService.js`
 
 Calls Gemini through `@google/genai`.
 
@@ -233,7 +241,7 @@ or:
 GEMINI_MODELS=gemini-3.5-flash,gemini-2.5-pro,gemini-2.5-flash
 ```
 
-### `server/services/responseParser.js`
+### 🔍 `server/services/responseParser.js`
 
 Extracts C++ source from model output.
 
@@ -250,9 +258,9 @@ Then falls back to generic markdown code blocks, and finally raw text.
 
 ---
 
-## Workflows
+## 🔁 Workflows
 
-### Initial Solve Workflow
+### 🚀 Initial Solve Workflow
 
 ```text
 Problem page
@@ -270,7 +278,7 @@ Problem page
 -> Codeforces redirects to status/my submissions
 ```
 
-### Problemset Submit Workflow
+### 🧮 Problemset Submit Workflow
 
 Problemset pages now require a problem code on the submit page.
 
@@ -296,7 +304,7 @@ https://codeforces.com/problemset/submit
 
 the extension fills the problem-code field before pasting source code.
 
-### Contest and Gym Submit Workflow
+### 🏁 Contest and Gym Submit Workflow
 
 Contest and gym pages use problem indexes such as `A`, `B`, or `F1`.
 
@@ -312,7 +320,7 @@ The extension navigates to:
 https://codeforces.com/contest/2118/submit?submittedProblemIndex=A
 ```
 
-### Verdict Tracking Workflow
+### 📡 Verdict Tracking Workflow
 
 Codeforces updates verdicts in real time without changing the URL:
 
@@ -325,7 +333,7 @@ In queue
 
 The extension watches the status table with a `MutationObserver`, tracks the relevant submission row, and reacts only when the verdict becomes final.
 
-### Retry Debug Workflow
+### 🛠️ Retry Debug Workflow
 
 ```text
 Final failed verdict
@@ -343,7 +351,7 @@ The failed-test number matters. If Codeforces says `Wrong answer on test 2`, the
 
 ---
 
-## Setup
+## ⚙️ Setup
 
 ### 1. Install Backend Dependencies
 
@@ -400,13 +408,13 @@ After changing extension files, reload the extension and refresh any already-ope
 
 ---
 
-## Common Issues
+## 🧯 Common Issues
 
-### `Cannot read properties of undefined (reading 'local')`
+### 🔄 `Cannot read properties of undefined (reading 'local')`
 
 This usually means the extension was reloaded while the Codeforces tab was already open. Refresh the Codeforces page after reloading the extension.
 
-### Backend returns `500`
+### 🧱 Backend returns `500`
 
 Check the server terminal. Common causes:
 
@@ -415,7 +423,7 @@ Check the server terminal. Common causes:
 - rate limits or quota issues
 - network failure
 
-### Code is not pasted into the editor
+### 📝 Code is not pasted into the editor
 
 Check whether:
 
@@ -424,13 +432,13 @@ Check whether:
 - `injector.js` is listed in `web_accessible_resources`
 - the Ace editor element id is still `editor`
 
-### Problemset submit page has a blank problem field
+### 🧮 Problemset submit page has a blank problem field
 
 This is expected on newer Codeforces problemset submit pages. The extension derives the problem code from the original problem URL and fills it automatically.
 
 ---
 
-## Security Notes
+## 🔐 Security Notes
 
 - The Gemini API key belongs in `server/.env`, not in extension files.
 - `allcode.py` intentionally excludes `.env` from `all_project_code.txt`.
@@ -438,7 +446,7 @@ This is expected on newer Codeforces problemset submit pages. The extension deri
 
 ---
 
-## Development Notes
+## 🛠️ Development Notes
 
 - Reload the Chrome extension after changing files in `extension/`.
 - Restart the backend after changing server code or `.env`.
@@ -448,7 +456,7 @@ This is expected on newer Codeforces problemset submit pages. The extension deri
 
 ---
 
-## Current Limitations
+## 🚧 Current Limitations
 
 - The problem scraper depends on Codeforces DOM structure and may need updates if Codeforces changes markup.
 - The generated code is only as reliable as the model response and prompt context.
