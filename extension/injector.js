@@ -1,39 +1,32 @@
 
-console.log('[INJECTED SCRIPT] Hello from the main page world! Listening for paste event.');
+console.log('[Codeforces Solver] Editor bridge ready.');
 
 window.addEventListener('pasteSolutionIntoCodeforcesEditor', (event) => {
-
-    console.log("%c--- INJECTED SCRIPT: EVENT RECEIVED ---", "color: #007bff; font-weight: bold;");
-    console.log("[Step 7] 'pasteSolutionIntoCodeforcesEditor' event was caught!");
+    console.log('[Codeforces Solver] Paste event received.');
 
     if (!event || !event.detail) {
-        console.error("[Step 8] FATAL: Event has no 'detail' object. Payload was likely dropped. Aborting.");
-        console.log("%c------------------------------------------", "color: #007bff;");
+        console.error('[Codeforces Solver] Paste event did not include a payload.');
         return;
     }
-    console.log("[Step 8] Event has a 'detail' object:", event.detail);
 
     const codeToPaste = event.detail.code;
 
     if (typeof codeToPaste !== 'string') {
-        console.error("[Step 9] FATAL: event.detail.code is not a string. Aborting.", `Type: ${typeof codeToPaste}`);
-        console.log("%c------------------------------------------", "color: #007bff;");
+        console.error('[Codeforces Solver] Paste payload is not a string.', `Type: ${typeof codeToPaste}`);
         return;
     }
-    console.log(`[Step 9] event.detail.code is a valid string. Length: ${codeToPaste.length}.`);
+    console.log(`[Codeforces Solver] Pasting ${codeToPaste.length} characters into Ace editor.`);
     
-    console.log("[Step 10] Attempting to paste into ACE editor...");
     try {
         const editor = window.ace.edit('editor');
         if (editor) {
             editor.setValue(codeToPaste, 1);
             editor.clearSelection();
-            console.log('[Step 11] SUCCESS: Pasted code via ACE API.');
+            console.log('[Codeforces Solver] Editor updated.');
         } else {
-             console.error('[Step 11] FAILED: Could not get ACE editor instance.');
+             console.error('[Codeforces Solver] Ace editor instance was not found.');
         }
     } catch (e) {
-        console.error('[Step 11] FAILED: Error while calling ACE API:', e);
+        console.error('[Codeforces Solver] Ace editor update failed:', e);
     }
-    console.log("%c------------------------------------------", "color: #007bff;");
 });

@@ -1,12 +1,6 @@
-/**
- * Cleans the raw text response from the AI to extract only the C++ code block.
- * It intelligently handles markdown blocks and other conversational text.
- * @param {string} rawResponse - The text response from the Gemini API.
- * @returns {string} The cleaned, pure C++ code.
- */
 function parseCodeFromResponse(rawResponse) {
   if (!rawResponse) {
-    return "// Error: Received an empty or null response from the AI.";
+    return "// Error: Received an empty response from the generator.";
   }
 
  

@@ -1,13 +1,36 @@
-console.log("--- Background Script (HQ) is online. ---");
+console.log("[Codeforces Solver] Background service worker started.");
 
-/**
- * Fetches the INITIAL AI solution from the backend server.
- * @param {object} problemData - The problem data scraped from the page.
- */
+const SOLVE_ERROR_KEY = 'solverGenerationError';
+
+const parseErrorResponse = async (response) => {
+  try {
+    const data = await response.json();
+    return data.details || data.error || `Server responded with status: ${response.status}`;
+  } catch (_) {
+    return `Server responded with status: ${response.status}`;
+  }
+};
+
+const clearPendingGenerationState = () => {
+  chrome.storage.local.remove(['solutionToPaste', SOLVE_ERROR_KEY]);
+};
+
+const storeGenerationError = (message) => {
+  chrome.storage.local.remove('solutionToPaste', () => {
+    chrome.storage.local.set({
+      [SOLVE_ERROR_KEY]: {
+        message,
+        timestamp: Date.now()
+      }
+    });
+  });
+};
 
 async function getSolutionAndStoreIt(problemData) {
   const serverUrl = 'http://localhost:3000/api/solve';
-  console.log(`HQ: Contacting server at ${serverUrl} to solve "${problemData.title}"...`);
+  console.log(`[Codeforces Solver] Requesting solution for "${problemData.title}".`);
+  clearPendingGenerationState();
+
   try {
     const response = await fetch(serverUrl, {
       method: 'POST',
@@ -16,43 +39,36 @@ async function getSolutionAndStoreIt(problemData) {
     });
 
     if (!response.ok) {
-      throw new Error(`Server responded with status: ${response.status}`);
+      throw new Error(await parseErrorResponse(response));
     }
 
     const data = await response.json();
-console.log("%c--- BACKGROUND SCRIPT: DATA RECEIVED (Solve) ---", "color: #ff8c00; font-weight: bold;");
-    console.log("Received payload from server. Checking 'solution' property.");
+    console.log("[Codeforces Solver] Solve response received.");
     if (data && typeof data.solution === 'string') {
-        console.log(`'data.solution' is a STRING. Length: ${data.solution.length}.`);
-        console.log("Attempting to write to chrome.storage...");
+        console.log(`[Codeforces Solver] Storing solution (${data.solution.length} characters).`);
         chrome.storage.local.set({ 
             solutionToPaste: data.solution,
             debugging_context_lastCode: data.solution 
         }, () => {
-            console.log("SUCCESS: Data has been written to chrome.storage.");
+            console.log("[Codeforces Solver] Solution stored.");
         });
     } else {
-        console.error("'data.solution' is MISSING or NOT a string. Aborting storage write.");
+        console.error("[Codeforces Solver] Server response did not include a valid solution string.");
         console.log(`Type: ${typeof data.solution}, Value:`, data.solution);
         throw new Error("Server response did not contain a valid 'solution' string.");
     }
-    console.log("%c----------------------------------------------------", "color: #ff8c00;");
 
   } catch (error) {
-    console.error('HQ: Fetch to backend for initial solve failed:', error);
-    chrome.storage.local.set({ solutionToPaste: `// Error: Failed to get solution.\n// Reason: ${error.message}` });
+    console.error('[Codeforces Solver] Solve request failed:', error);
+    storeGenerationError(`Failed to generate solution. ${error.message}`);
   }
 }
 
-
-/**
- * Fetches a DEBUGGED AI solution from the backend and stores it for pasting.
- * @param {object} debugContext - The full context including problem, failed code, and failure details.
- */
-
 async function getDebuggedSolution(debugContext) {
   const serverUrl = 'http://localhost:3000/api/debug'; 
-  console.log(`HQ: Contacting server at ${serverUrl} to debug the problem...`);
+  console.log(`[Codeforces Solver] Requesting corrected solution for "${debugContext.problem?.title ?? 'unknown problem'}".`);
+  clearPendingGenerationState();
+
   try {
     const response = await fetch(serverUrl, {
       method: 'POST',
@@ -61,32 +77,29 @@ async function getDebuggedSolution(debugContext) {
     });
 
     if (!response.ok) {
-      throw new Error(`Server responded with status: ${response.status}`);
+      throw new Error(await parseErrorResponse(response));
     }
 
     const data = await response.json();
 
-console.log("%c--- BACKGROUND SCRIPT: DATA RECEIVED (Debug) ---", "color: #ff8c00; font-weight: bold;");
-    console.log("Received payload from server. Checking 'solution' property.");
+    console.log("[Codeforces Solver] Retry response received.");
     if (data && typeof data.solution === 'string') {
-        console.log(`'data.solution' is a STRING. Length: ${data.solution.length}.`);
-        console.log("Attempting to write to chrome.storage...");
+        console.log(`[Codeforces Solver] Storing corrected solution (${data.solution.length} characters).`);
         chrome.storage.local.set({ 
             solutionToPaste: data.solution,
             debugging_context_lastCode: data.solution 
         }, () => {
-            console.log("SUCCESS: Data has been written to chrome.storage.");
+            console.log("[Codeforces Solver] Corrected solution stored.");
         });
     } else {
-        console.error("'data.solution' is MISSING or NOT a string. Aborting storage write.");
+        console.error("[Codeforces Solver] Server response did not include a valid corrected solution string.");
         console.log(`Type: ${typeof data.solution}, Value:`, data.solution);
         throw new Error("Server response did not contain a valid 'solution' string.");
     }
-    console.log("%c----------------------------------------------------", "color: #ff8c00;");
 
   } catch (error) {
-    console.error('HQ: Fetch to backend for debug failed:', error);
-    chrome.storage.local.set({ solutionToPaste: `// Error: Failed to get debugged solution.\n// Reason: ${error.message}` });
+    console.error('[Codeforces Solver] Retry request failed:', error);
+    storeGenerationError(`Failed to generate corrected solution. ${error.message}`);
   }
 }
 
@@ -96,21 +109,21 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   
     if (message.type === 'getSolutionAndPrepareToPaste') {
         
-        console.log("HQ: Received 'Solve' mission. Will fetch solution in the background.");
+        console.log("[Codeforces Solver] Solve request received from content script.");
         getSolutionAndStoreIt(message.data);
 
         if (message.submitUrl) {
-            console.log("HQ: Navigating user's tab to a specific URL provided by content script.");
+            console.log("[Codeforces Solver] Opening submit page.");
             chrome.tabs.update(sender.tab.id, { url: message.submitUrl });
         } else {
-            console.log("HQ: No submitUrl provided. Navigation handled by content script.");
+            console.log("[Codeforces Solver] Submit navigation is handled by the current page.");
         }
         return; 
     }
 
 
     if (message.type === 'requestDebugSolution') {
-        console.log("HQ: Received 'Debug' mission. Will contact server with failure context.");
+        console.log("[Codeforces Solver] Retry request received from content script.");
         getDebuggedSolution(message.data);
         return; 
     }

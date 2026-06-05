@@ -1,3 +1,139 @@
+--- extension\background.js ---
+console.log("[Codeforces Solver] Background service worker started.");
+
+const SOLVE_ERROR_KEY = 'solverGenerationError';
+
+const parseErrorResponse = async (response) => {
+  try {
+    const data = await response.json();
+    return data.details || data.error || `Server responded with status: ${response.status}`;
+  } catch (_) {
+    return `Server responded with status: ${response.status}`;
+  }
+};
+
+const clearPendingGenerationState = () => {
+  chrome.storage.local.remove(['solutionToPaste', SOLVE_ERROR_KEY]);
+};
+
+const storeGenerationError = (message) => {
+  chrome.storage.local.remove('solutionToPaste', () => {
+    chrome.storage.local.set({
+      [SOLVE_ERROR_KEY]: {
+        message,
+        timestamp: Date.now()
+      }
+    });
+  });
+};
+
+async function getSolutionAndStoreIt(problemData) {
+  const serverUrl = 'http://localhost:3000/api/solve';
+  console.log(`[Codeforces Solver] Requesting solution for "${problemData.title}".`);
+  clearPendingGenerationState();
+
+  try {
+    const response = await fetch(serverUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(problemData)
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseErrorResponse(response));
+    }
+
+    const data = await response.json();
+    console.log("[Codeforces Solver] Solve response received.");
+    if (data && typeof data.solution === 'string') {
+        console.log(`[Codeforces Solver] Storing solution (${data.solution.length} characters).`);
+        chrome.storage.local.set({ 
+            solutionToPaste: data.solution,
+            debugging_context_lastCode: data.solution 
+        }, () => {
+            console.log("[Codeforces Solver] Solution stored.");
+        });
+    } else {
+        console.error("[Codeforces Solver] Server response did not include a valid solution string.");
+        console.log(`Type: ${typeof data.solution}, Value:`, data.solution);
+        throw new Error("Server response did not contain a valid 'solution' string.");
+    }
+
+  } catch (error) {
+    console.error('[Codeforces Solver] Solve request failed:', error);
+    storeGenerationError(`Failed to generate solution. ${error.message}`);
+  }
+}
+
+async function getDebuggedSolution(debugContext) {
+  const serverUrl = 'http://localhost:3000/api/debug'; 
+  console.log(`[Codeforces Solver] Requesting corrected solution for "${debugContext.problem?.title ?? 'unknown problem'}".`);
+  clearPendingGenerationState();
+
+  try {
+    const response = await fetch(serverUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(debugContext)
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseErrorResponse(response));
+    }
+
+    const data = await response.json();
+
+    console.log("[Codeforces Solver] Retry response received.");
+    if (data && typeof data.solution === 'string') {
+        console.log(`[Codeforces Solver] Storing corrected solution (${data.solution.length} characters).`);
+        chrome.storage.local.set({ 
+            solutionToPaste: data.solution,
+            debugging_context_lastCode: data.solution 
+        }, () => {
+            console.log("[Codeforces Solver] Corrected solution stored.");
+        });
+    } else {
+        console.error("[Codeforces Solver] Server response did not include a valid corrected solution string.");
+        console.log(`Type: ${typeof data.solution}, Value:`, data.solution);
+        throw new Error("Server response did not contain a valid 'solution' string.");
+    }
+
+  } catch (error) {
+    console.error('[Codeforces Solver] Retry request failed:', error);
+    storeGenerationError(`Failed to generate corrected solution. ${error.message}`);
+  }
+}
+
+
+chrome.runtime.onMessage.addListener((message, sender) => {
+    
+  
+    if (message.type === 'getSolutionAndPrepareToPaste') {
+        
+        console.log("[Codeforces Solver] Solve request received from content script.");
+        getSolutionAndStoreIt(message.data);
+
+        if (message.submitUrl) {
+            console.log("[Codeforces Solver] Opening submit page.");
+            chrome.tabs.update(sender.tab.id, { url: message.submitUrl });
+        } else {
+            console.log("[Codeforces Solver] Submit navigation is handled by the current page.");
+        }
+        return; 
+    }
+
+
+    if (message.type === 'requestDebugSolution') {
+        console.log("[Codeforces Solver] Retry request received from content script.");
+        getDebuggedSolution(message.data);
+        return; 
+    }
+});
+
+
+==================================================
+
+--- extension\content_script.js ---
 (() => {
     console.log(`[Codeforces Solver] Content script loaded on ${window.location.href}`);
 
@@ -773,3 +909,675 @@ const main = () => {
 
     main();
 })();
+
+
+==================================================
+
+--- extension\injector.js ---
+
+console.log('[Codeforces Solver] Editor bridge ready.');
+
+window.addEventListener('pasteSolutionIntoCodeforcesEditor', (event) => {
+    console.log('[Codeforces Solver] Paste event received.');
+
+    if (!event || !event.detail) {
+        console.error('[Codeforces Solver] Paste event did not include a payload.');
+        return;
+    }
+
+    const codeToPaste = event.detail.code;
+
+    if (typeof codeToPaste !== 'string') {
+        console.error('[Codeforces Solver] Paste payload is not a string.', `Type: ${typeof codeToPaste}`);
+        return;
+    }
+    console.log(`[Codeforces Solver] Pasting ${codeToPaste.length} characters into Ace editor.`);
+    
+    try {
+        const editor = window.ace.edit('editor');
+        if (editor) {
+            editor.setValue(codeToPaste, 1);
+            editor.clearSelection();
+            console.log('[Codeforces Solver] Editor updated.');
+        } else {
+             console.error('[Codeforces Solver] Ace editor instance was not found.');
+        }
+    } catch (e) {
+        console.error('[Codeforces Solver] Ace editor update failed:', e);
+    }
+});
+
+
+==================================================
+
+--- extension\manifest.json ---
+{
+  "manifest_version": 3,
+  "name": "Drive Codeforces",
+  "version": "1.0.0",
+  "description": "An extension to solve Codeforces problems using AI and provide real-time verdict highlighting.",
+
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    },
+    "default_title": "Drive Codeforces",
+    "default_popup": "popup.html"
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+    "content_scripts": [
+    {
+      "matches": [
+        "https://codeforces.com/problemset/problem/*",
+        "https://codeforces.com/contest/*/problem/*",
+        "https://codeforces.com/gym/*/problem/*",
+        "https://codeforces.com/problemset/submit",
+        "https://codeforces.com/contest/*/submit*",
+        "https://codeforces.com/gym/*/submit*",
+        "https://codeforces.com/problemset/status*",
+        "https://codeforces.com/contest/*/status*",
+        "https://codeforces.com/gym/*/status*",
+        "https://codeforces.com/submissions/*",
+        "https://codeforces.com/my",
+        "https://codeforces.com/contest/*/my*"
+      ],
+      "js": ["content_script.js"],
+      "css": ["style.css"]
+    }
+  ],
+  
+  "web_accessible_resources": [
+    {
+      "resources": ["injector.js"],
+      "matches": ["*://codeforces.com/*"]
+    }
+  ],
+
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  
+  "host_permissions": [
+    "*://codeforces.com/*",
+    "http://localhost:3000/"
+  ]
+}
+
+==================================================
+
+--- extension\popup.css ---
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    width: 250px; 
+    padding: 10px 15px;
+    text-align: center;
+    background-color: #f4f6f9;
+    margin: 0;
+}
+
+h1 {
+    font-size: 16px;
+    color: #333;
+    margin: 0 0 10px 0;
+}
+
+p {
+    font-size: 13px;
+    color: #555;
+    margin: 0;
+}
+
+hr {
+    border: 0;
+    height: 1px;
+    background-color: #e0e0e0;
+    margin: 15px 0;
+}
+
+.status {
+    font-size: 12px;
+    color: #777;
+}
+
+
+==================================================
+
+--- extension\popup.html ---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Codeforces AI Solver</title>
+    <!-- Link to our dedicated stylesheet -->
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <h1>Codeforces AI Solver</h1>
+    <p>The "Solve with AI" button is automatically injected on problem pages.</p>
+    
+    <hr>
+
+    <p class="status">Version 0.1.0</p>
+
+    <!-- Link to our dedicated logic script -->
+    <script src="popup.js"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+==================================================
+
+--- extension\popup.js ---
+document.addEventListener('DOMContentLoaded', () => {
+    console.log("Popup opened and its script is running.");
+});
+
+
+==================================================
+
+--- extension\style.css ---
+.cf-highlighter-tracking {
+  border: 2px solid #333333 !important;
+  transition: border 0.3s ease-in-out;
+}
+
+.status-frame-datatable tr.cf-highlighter-tracking td {
+  background-color: #f5f5f5 !important; 
+  transition: background-color 0.3s ease-in-out;
+}
+
+.cf-highlighter-accepted {
+  border: 2px solid #009900 !important;
+}
+
+.status-frame-datatable tr.cf-highlighter-accepted td {
+  background-color: #e8f8e8 !important;
+}
+
+.cf-highlighter-rejected {
+  border: 2px solid #d10000 !important;
+}
+
+.status-frame-datatable tr.cf-highlighter-rejected td {
+  background-color: #fff0f0 !important;
+}
+
+
+
+
+.cf-highlighter-status-indicator {
+  color: #888888;
+  font-style: italic;
+  font-size: 0.9em;
+}
+
+.cf-highlighter-copy-btn {
+  margin-left: 8px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #3B5998;
+  background-color: #f5f5f5;
+  border: 1px solid #cccccc;
+  border-radius: 3px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: all 0.2s ease;
+}
+
+.cf-highlighter-copy-btn:hover {
+  background-color: #e8e8e8;
+  border-color: #aaaaaa;
+}
+
+.cf-debugger-retry-btn {
+  display: none;
+  position: absolute;
+  z-index: 1000;
+  
+
+  background-color: #6a5acd;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  
+  transition: top 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+.cf-debugger-retry-btn:hover {
+  background-color: #5d4eb4;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+
+.ai-solver-table-wrapper {
+  position: relative;
+  overflow: visible !important;
+}
+
+
+==================================================
+
+--- server\.gitignore ---
+node_modules/
+.env
+all_code.txt
+
+==================================================
+
+--- server\index.js ---
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const corsOptions = require('./config/corsOptions');
+
+const apiRoutes = require('./routes/solveRoutes'); 
+
+const app = express();
+
+app.use(cors(corsOptions));
+app.use(express.json());
+
+app.get('/', (req, res) => {
+  res.send('Backend Server is alive!');
+});
+
+app.use('/api', apiRoutes);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
+
+
+==================================================
+
+--- server\package.json ---
+{
+  "name": "extension-phase-1",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "npx nodemon index.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "keywords": [],
+  "description": "",
+  "dependencies": {
+    "@google/genai": "^1.12.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
+
+
+==================================================
+
+--- server\config\corsOptions.js ---
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || origin.startsWith('chrome-extension://')) {
+      callback(null, true);
+    } else {
+      callback(new Error('This origin is not allowed by CORS'));
+    }
+  },
+  optionsSuccessStatus: 200
+};
+
+module.exports = corsOptions;
+
+
+==================================================
+
+--- server\routes\solveRoutes.js ---
+const express = require('express');
+const router = express.Router();
+const { getAiSolution } = require('../services/aiService');
+const { buildOptimalPrompt, buildDebugPrompt } = require('../services/promptBuilder');
+const { performance } = require('perf_hooks');
+
+router.post('/solve', async (req, res) => {
+  console.log('--- Request received at /api/solve ---');
+
+  const problemData = req.body;
+  if (!problemData || !problemData.title || !problemData.statement) {
+    console.error('Validation Failed: Request body is missing title or statement.');
+    return res.status(400).json({ error: 'Invalid request body. Missing title or statement.' });
+  }
+
+  console.log(`Received request for problem: "${problemData.title}"`);
+
+  try {
+    const prompt = buildOptimalPrompt(problemData);
+    
+    const startTime = performance.now();
+
+    const solutionCode = await getAiSolution(prompt);
+
+    const endTime = performance.now();
+    const durationInSeconds = ((endTime - startTime) / 1000).toFixed(2);
+    console.log(`Generation latency: ${durationInSeconds}s.`);
+    
+    const responsePayload = { solution: solutionCode };
+    console.log('--- Successfully generated initial solution. Sending 200 OK response. ---');
+    res.status(200).json(responsePayload);
+
+  } catch (error) {
+    console.error("--- Error in /api/solve handler:", error.message);
+    res.status(500).json({ 
+      error: "An internal server error occurred while generating the solution.",
+      details: error.message
+    });
+  }
+});
+
+
+router.post('/debug', async (req, res) => {
+    console.log('--- Request received at /api/debug ---');
+
+    const debugContext = req.body;
+    if (!debugContext || !debugContext.problem || !debugContext.failedAttempt?.code) {
+        console.error('Validation Failed: Debug context is missing required fields.');
+        return res.status(400).json({ error: 'Invalid request body. Missing debug context.' });
+    }
+
+    console.log(`Received debug request for problem: "${debugContext.problem.title}"`);
+
+    try {
+        const prompt = buildDebugPrompt(debugContext);
+
+        console.log("==========================================================");
+        console.log("            DEBUG PROMPT                                  ");
+        console.log("==========================================================");
+        console.log(prompt);
+        console.log("==========================================================");
+
+        const startTime = performance.now();
+
+        const solutionCode = await getAiSolution(prompt);
+
+        const endTime = performance.now();
+        const durationInSeconds = ((endTime - startTime) / 1000).toFixed(2);
+        console.log(`Generation latency: ${durationInSeconds}s.`);
+
+        const responsePayload = { solution: solutionCode };
+        console.log('--- Successfully generated debugged solution. Sending 200 OK response. ---');
+        res.status(200).json(responsePayload);
+
+    } catch (error) {
+        console.error("--- Error in /api/debug handler ---");
+        console.error("Message:", error.message);
+        console.error("Stack:", error.stack);
+        res.status(500).json({ 
+            error: "An internal server error occurred while generating the corrected solution.",
+            details: error.message
+        });
+    }
+});
+
+module.exports = router;
+
+
+==================================================
+
+--- server\services\aiService.js ---
+const { GoogleGenAI } = require('@google/genai');
+const { parseCodeFromResponse } = require('./responseParser');
+
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+const getModelCandidates = () => {
+  const configuredModels = process.env.GEMINI_MODEL || process.env.GEMINI_MODELS;
+  if (configuredModels) {
+    return configuredModels
+      .split(',')
+      .map((model) => model.trim())
+      .filter(Boolean);
+  }
+
+  return [
+    "gemini-3.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash"
+  ];
+};
+
+const isRetryableModelError = (error) => {
+  const message = error?.message || '';
+  return message.includes('[404 Not Found]') ||
+         message.includes('not found') ||
+         message.includes('is not supported for generateContent') ||
+         message.includes('[403 Forbidden]') ||
+         message.includes('[429 Too Many Requests]');
+};
+
+async function getAiSolution(prompt) {
+  const modelCandidates = getModelCandidates();
+  let lastError = null;
+
+  for (const modelName of modelCandidates) {
+    console.log(`Gemini service: using model ${modelName}`);
+    console.log("Gemini service: sending generation request.");
+
+    try {
+      const response = await genAI.models.generateContent({
+        model: modelName,
+        contents: prompt
+      });
+
+      const rawSolution = response?.text;
+      if (!rawSolution) {
+        throw new Error('The generation service returned an empty response.');
+      }
+
+      console.log("==========================================================");
+      console.log("            RAW RESPONSE FROM GEMINI API                  ");
+      console.log("==========================================================");
+      console.log(rawSolution);
+      console.log("==========================================================");
+
+      const cleanSolution = parseCodeFromResponse(rawSolution);
+
+      console.log("==========================================================");
+      console.log("            PARSED SOLUTION (after cleaning)              ");
+      console.log("==========================================================");
+      console.log(`--- Start of Parsed Code (Length: ${cleanSolution.length}) ---`);
+      console.log(cleanSolution);
+      console.log("--- End of Parsed Code ---");
+      if (cleanSolution.length === 0) {
+        console.warn("\nGemini service: parsed solution is empty.\n");
+      }
+      console.log("==========================================================");
+
+      return cleanSolution;
+    } catch (error) {
+      lastError = error;
+      console.error(`Gemini service: model ${modelName} failed:`, error.message);
+
+      if (!isRetryableModelError(error)) {
+        break;
+      }
+
+      console.warn("Gemini service: trying the next configured model.");
+    }
+  }
+
+  throw lastError || new Error("No Gemini models were configured.");
+}
+
+module.exports = { getAiSolution };
+
+
+
+
+==================================================
+
+--- server\services\promptBuilder.js ---
+function buildOptimalPrompt(problemData) {
+  const rolePlaying = "You are a world-class competitive programmer and an expert C++ algorithmist. You are known for writing clean, efficient, and correct code.";
+
+  const taskAndConstraints = "Your task is to solve the following programming problem. The solution must be a single, complete, runnable C++ program that reads from standard input and writes to standard output.";
+  
+  const formatting = "Your response MUST contain ONLY the C++ code. Do not include any introductory text, explanations, analysis, or concluding remarks. The entire response should be the raw source code, optionally inside a ```cpp markdown block.";
+
+  const problemContext = `
+--- PROBLEM TITLE ---
+${problemData.title}
+
+--- PROBLEM STATEMENT ---
+${problemData.statement}
+
+--- SAMPLE CASES ---
+${problemData.samples.map((sample, index) => `
+Sample Input ${index + 1}:
+${sample.input}
+Sample Output ${index + 1}:
+${sample.output}`).join('\n')}
+`;
+
+  const finalPrompt = `
+${rolePlaying}
+
+${taskAndConstraints}
+
+${formatting}
+${problemContext}
+--- YOUR C++ SOLUTION CODE ---
+`;
+
+  return finalPrompt.trim();
+}
+
+
+function buildDebugPrompt(debugContext) {
+  const { problem, failedAttempt } = debugContext;
+  const { code, failureDetails } = failedAttempt;
+
+  const rolePlaying = "You are a world-class competitive programmer and an expert debugger. You methodically analyze failures to devise robust, correct solutions.";
+
+
+  const taskAndConstraints = `
+--- TASK ---
+
+Your previous solution was based on a flawed premise:
+
+This entire line of reasoning has been proven incorrect. Your task is to act as an expert debugger and follow these steps precisely:
+
+1.  **ANALYZE THE FAILURE:** Your primary task is to deeply analyze the provided "Debugging Data". Understand *exactly* why the previous code failed on that specific input by comparing your incorrect output to the expected answer.
+
+2.  **ABANDON THE FAILED LOGIC:** Based on your analysis, you must completely **abandon the flawed logic** of the previous attempt. Do not try to patch it or make small changes. It is fundamentally wrong.
+
+3.  **DESIGN A NEW ALGORITHM:** Formulate a **fundamentally new and correct algorithm** that properly handles the problem's constraints and the specific edge case revealed by the failed test.
+
+4.  **IMPLEMENT THE SOLUTION:** Write the complete, runnable C++ code for your new solution. Your entire response must be **ONLY the C++ code** inside a markdown block. Do not include any explanations, apologies, or conversational text.
+`;
+
+  
+  let checkerLogContext = '';
+  if (failureDetails.checkerLog && failureDetails.checkerLog.trim() && failureDetails.checkerLog !== '[Not Available]') {
+      checkerLogContext = `
+--- CHECKER LOG (This is a huge clue!) ---
+${failureDetails.checkerLog}
+`;
+  }
+
+  const context = `
+--- ORIGINAL PROBLEM DEFINITION ---
+Title: ${problem.title}
+${problem.statement}
+
+--- FAILED EXPERIMENT (The Previous Incorrect Code) ---
+The following code is based on a flawed premise and should NOT be reused.
+\`\`\`cpp
+${code}
+\`\`\`
+
+--- DEBUGGING DATA (Your Primary Focus) ---
+This data reveals the flaw in the previous attempt.
+
+${checkerLogContext}
+
+[BATCH INPUT THAT CAUSED FAILURE]
+${failureDetails.input}
+
+[YOUR PROGRAM's INCORRECT BATCH OUTPUT]
+${failureDetails.output}
+
+[THE JUDGE's CORRECT BATCH ANSWER]
+${failureDetails.answer}
+
+--- YOUR NEW, CORRECT C++ SOLUTION (Based on a New Algorithm) ---
+`;
+
+  return `
+${rolePlaying}
+
+${taskAndConstraints}
+
+${context}
+  `.trim();
+}
+
+module.exports = { buildOptimalPrompt, buildDebugPrompt };
+
+
+==================================================
+
+--- server\services\responseParser.js ---
+function parseCodeFromResponse(rawResponse) {
+  if (!rawResponse) {
+    return "// Error: Received an empty response from the generator.";
+  }
+
+ 
+  const cppBlockMatch = rawResponse.match(/```cpp([\s\S]*?)```/);
+  if (cppBlockMatch && cppBlockMatch[1]) {
+    return cppBlockMatch[1].trim();
+  }
+
+  const genericBlockMatch = rawResponse.match(/```([\s\S]*?)```/);
+  if (genericBlockMatch && genericBlockMatch[1]) {
+   
+    const code = genericBlockMatch[1];
+    return code.replace(/^(cpp|c\+\+)\s*\n/, '').trim(); 
+  }
+
+  return rawResponse.trim();
+}
+
+module.exports = { parseCodeFromResponse };
+
+
+==================================================
+

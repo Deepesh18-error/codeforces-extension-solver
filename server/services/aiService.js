@@ -1,68 +1,85 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenAI } = require('@google/genai');
 const { parseCodeFromResponse } = require('./responseParser');
 
-// Initialize the Google AI Client
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-/**
- * The main service function. It takes a pre-built prompt, sends it to the Gemini API,
- * and returns the cleaned code solution.
- * @param {string} prompt - The fully-formed prompt to send to the AI.
- * @returns {Promise<string>} A promise that resolves with the final, clean AI-generated code.
- */
+const getModelCandidates = () => {
+  const configuredModels = process.env.GEMINI_MODEL || process.env.GEMINI_MODELS;
+  if (configuredModels) {
+    return configuredModels
+      .split(',')
+      .map((model) => model.trim())
+      .filter(Boolean);
+  }
+
+  return [
+    "gemini-3.5-flash",
+    "gemini-2.5-pro",
+    "gemini-2.5-flash"
+  ];
+};
+
+const isRetryableModelError = (error) => {
+  const message = error?.message || '';
+  return message.includes('[404 Not Found]') ||
+         message.includes('not found') ||
+         message.includes('is not supported for generateContent') ||
+         message.includes('[403 Forbidden]') ||
+         message.includes('[429 Too Many Requests]');
+};
 
 async function getAiSolution(prompt) {
-  try {
-      
-    // gemini-1.5-flash-latest , gemini-2.5-flash-preview-05-20
+  const modelCandidates = getModelCandidates();
+  let lastError = null;
 
-    const modelName = "gemini-2.5-flash-preview-05-20";
-    
-    console.log(`AI_Service: Using Google Gemini model: ${modelName}`);
-    console.log("AI_Service: Sending request to Google Gemini...");
-    
-    const model = genAI.getGenerativeModel({ model: modelName });
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    
-    if (!response || !response.text()) {
-        const finishReason = response?.promptFeedback?.blockReason || 'No content';
-        const safetyRatings = response?.candidates?.[0]?.safetyRatings || 'N/A';
-        console.error(`AI_Service: Gemini response was empty or blocked. Reason: ${finishReason}`);
-        console.error(`AI_Service: Safety Ratings: ${JSON.stringify(safetyRatings)}`);
-        throw new Error(`The AI service returned an empty or blocked response. Reason: ${finishReason}`);
+  for (const modelName of modelCandidates) {
+    console.log(`Gemini service: using model ${modelName}`);
+    console.log("Gemini service: sending generation request.");
+
+    try {
+      const response = await genAI.models.generateContent({
+        model: modelName,
+        contents: prompt
+      });
+
+      const rawSolution = response?.text;
+      if (!rawSolution) {
+        throw new Error('The generation service returned an empty response.');
+      }
+
+      console.log("==========================================================");
+      console.log("            RAW RESPONSE FROM GEMINI API                  ");
+      console.log("==========================================================");
+      console.log(rawSolution);
+      console.log("==========================================================");
+
+      const cleanSolution = parseCodeFromResponse(rawSolution);
+
+      console.log("==========================================================");
+      console.log("            PARSED SOLUTION (after cleaning)              ");
+      console.log("==========================================================");
+      console.log(`--- Start of Parsed Code (Length: ${cleanSolution.length}) ---`);
+      console.log(cleanSolution);
+      console.log("--- End of Parsed Code ---");
+      if (cleanSolution.length === 0) {
+        console.warn("\nGemini service: parsed solution is empty.\n");
+      }
+      console.log("==========================================================");
+
+      return cleanSolution;
+    } catch (error) {
+      lastError = error;
+      console.error(`Gemini service: model ${modelName} failed:`, error.message);
+
+      if (!isRetryableModelError(error)) {
+        break;
+      }
+
+      console.warn("Gemini service: trying the next configured model.");
     }
-    
-    const rawSolution = response.text();
-    
-    
-    console.log("==========================================================");
-    console.log("            RAW RESPONSE FROM GEMINI API                  ");
-    console.log("==========================================================");
-    console.log(rawSolution);
-    console.log("==========================================================");
-  
-
-    const cleanSolution = parseCodeFromResponse(rawSolution);
-
-    console.log("==========================================================");
-    console.log("            PARSED SOLUTION (after cleaning)              ");
-    console.log("==========================================================");
-    console.log(`--- Start of Parsed Code (Length: ${cleanSolution.length}) ---`);
-    console.log(cleanSolution);
-    console.log("--- End of Parsed Code ---");
-    if (cleanSolution.length === 0) {
-        console.warn("\nAI_Service: WARNING - The parsed solution is an EMPTY STRING. This is likely causing the empty editor issue.\n");
-    }
-    console.log("==========================================================");
-  
-
-    return cleanSolution;
-
-  } catch (error) {
-    console.error("AI_Service: An error occurred within getAiSolution:", error.message);
-    throw error;
   }
+
+  throw lastError || new Error("No Gemini models were configured.");
 }
 
 module.exports = { getAiSolution };

@@ -1,37 +1,25 @@
-/*
- * Phase 1: The initial "tracking" style.
- */
 .cf-highlighter-tracking {
   border: 2px solid #333333 !important;
   transition: border 0.3s ease-in-out;
 }
 
-/* CORRECTED SELECTOR for the background color */
 .status-frame-datatable tr.cf-highlighter-tracking td {
   background-color: #f5f5f5 !important; 
   transition: background-color 0.3s ease-in-out;
 }
 
-/* 
- * Phase 2 Final State: Accepted Verdict
- */
 .cf-highlighter-accepted {
   border: 2px solid #009900 !important;
 }
 
-/* the background color */
 .status-frame-datatable tr.cf-highlighter-accepted td {
   background-color: #e8f8e8 !important;
 }
 
-/* 
- * Phase 2 Final State: Rejected Verdict (WA, TLE, etc.)
- */
 .cf-highlighter-rejected {
   border: 2px solid #d10000 !important;
 }
 
-/*  the background color */
 .status-frame-datatable tr.cf-highlighter-rejected td {
   background-color: #fff0f0 !important;
 }
@@ -64,17 +52,13 @@
   border-color: #aaaaaa;
 }
 
-/*
- *  AI Debugger "Retry" Button Styles
- */
-
 .cf-debugger-retry-btn {
-  display: none; /* Hidden by default */
-  position: absolute; /* Crucial for placing it outside the table flow */
-  z-index: 1000; /* Ensure it's on top of other page elements */
+  display: none;
+  position: absolute;
+  z-index: 1000;
   
 
-  background-color: #6a5acd; /* A nice purple (SlateBlue) */
+  background-color: #6a5acd;
   color: white;
   padding: 8px 16px;
   border: none;
@@ -85,7 +69,6 @@
   text-align: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   
-  /* Smooth transitions for appearing/moving */
   transition: top 0.2s ease-out, opacity 0.2s ease-out;
 }
 
@@ -96,6 +79,6 @@
 
 
 .ai-solver-table-wrapper {
-  position: relative; /* This is the key: It creates a positioning context */
-  overflow: visible !important; /* This is the fix: It ensures our button isn't clipped */
+  position: relative;
+  overflow: visible !important;
 }
